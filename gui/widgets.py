@@ -26,9 +26,9 @@ class ScrollableLogFrame(ttk.Frame):
 
 
 class LabeledEntry(ttk.Frame):
-    def __init__(self, parent, label, default="", width=30, **kwargs):
+    def __init__(self, parent, label, default="", width=30, label_width=12, **kwargs):
         super().__init__(parent, **kwargs)
-        ttk.Label(self, text=label, width=18, anchor=tk.W).pack(side=tk.LEFT, padx=(0, 5))
+        ttk.Label(self, text=label, width=label_width, anchor=tk.W).pack(side=tk.LEFT, padx=(0, 5))
         self.var = tk.StringVar(value=default)
         self.entry = ttk.Entry(self, textvariable=self.var, width=width)
         self.entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
@@ -49,13 +49,13 @@ class SSHConnectionPanel(ttk.LabelFrame):
     def _build(self):
         row1 = ttk.Frame(self)
         row1.pack(fill=tk.X)
-        self.host_entry = LabeledEntry(row1, "Host:", "192.168.1.100")
+        self.host_entry = LabeledEntry(row1, "Host:", "192.168.1.100", width=22, label_width=5)
         self.host_entry.pack(side=tk.LEFT, padx=(0, 5))
-        self.port_entry = LabeledEntry(row1, "Port:", "22", width=8)
+        self.port_entry = LabeledEntry(row1, "Port:", "22", width=8, label_width=5)
         self.port_entry.pack(side=tk.LEFT, padx=(0, 5))
-        self.user_entry = LabeledEntry(row1, "User:", "root")
+        self.user_entry = LabeledEntry(row1, "User:", "root", width=12, label_width=5)
         self.user_entry.pack(side=tk.LEFT, padx=(0, 5))
-        self.pwd_entry = LabeledEntry(row1, "Password:", "", width=20)
+        self.pwd_entry = LabeledEntry(row1, "Pwd:", "", width=18, label_width=4)
         self.pwd_entry.pack(side=tk.LEFT, padx=(0, 5))
         self.pwd_entry.entry.configure(show="*")
 
