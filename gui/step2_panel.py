@@ -64,23 +64,20 @@ class Step2Panel(ttk.Frame):
 
     def _on_mode_change(self):
         if self.mode_var.get() == "online":
-            for w in self.offline_frame.winfo_children():
-                w.configure(state=tk.DISABLED)
-            for w in self.online_frame.winfo_children():
-                try:
-                    w.configure(state=tk.NORMAL)
-                except Exception:
-                    pass
+            self._set_entries_state(self.offline_frame, tk.DISABLED)
+            self._set_entries_state(self.online_frame, tk.NORMAL)
             self.run_btn.configure(text="Execute TTFT Test")
         else:
-            for w in self.online_frame.winfo_children():
-                try:
-                    w.configure(state=tk.DISABLED)
-                except Exception:
-                    pass
-            for w in self.offline_frame.winfo_children():
-                w.configure(state=tk.NORMAL)
+            self._set_entries_state(self.online_frame, tk.DISABLED)
+            self._set_entries_state(self.offline_frame, tk.NORMAL)
             self.run_btn.configure(text="Confirm Offline Values")
+
+    def _set_entries_state(self, parent, state):
+        for child in parent.winfo_children():
+            if isinstance(child, tk.Entry):
+                child.configure(state=state)
+            elif hasattr(child, 'winfo_children'):
+                self._set_entries_state(child, state)
 
     def _on_run(self):
         if self.mode_var.get() == "offline":
