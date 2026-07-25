@@ -47,24 +47,25 @@ class SSHConnectionPanel(ttk.LabelFrame):
         self._build()
 
     def _build(self):
-        row = ttk.Frame(self)
-        row.pack(fill=tk.X)
-        self.host_entry = LabeledEntry(row, "Host:", "192.168.1.100")
+        row1 = ttk.Frame(self)
+        row1.pack(fill=tk.X)
+        self.host_entry = LabeledEntry(row1, "Host:", "192.168.1.100")
         self.host_entry.pack(side=tk.LEFT, padx=(0, 5))
-        self.port_entry = LabeledEntry(row, "Port:", "22", width=8)
+        self.port_entry = LabeledEntry(row1, "Port:", "22", width=8)
         self.port_entry.pack(side=tk.LEFT, padx=(0, 5))
-        self.user_entry = LabeledEntry(row, "User:", "root")
+        self.user_entry = LabeledEntry(row1, "User:", "root")
         self.user_entry.pack(side=tk.LEFT, padx=(0, 5))
-        self.pwd_entry = LabeledEntry(row, "Password:", "", width=20)
+        self.pwd_entry = LabeledEntry(row1, "Password:", "", width=20)
         self.pwd_entry.pack(side=tk.LEFT, padx=(0, 5))
         self.pwd_entry.entry.configure(show="*")
 
-        self.status_label = ttk.Label(row, text="disconnected", foreground="gray")
+        row2 = ttk.Frame(self)
+        row2.pack(fill=tk.X, pady=(5, 0))
+        self.status_label = ttk.Label(row2, text="disconnected", foreground="gray")
         self.status_label.pack(side=tk.LEFT, padx=5)
-
-        self.connect_btn = ttk.Button(row, text="Connect", command=self._on_connect_click)
+        self.connect_btn = ttk.Button(row2, text="Connect", command=self._on_connect_click)
         self.connect_btn.pack(side=tk.LEFT, padx=5)
-        self.disconnect_btn = ttk.Button(row, text="Disconnect", command=self._on_disconnect_click, state=tk.DISABLED)
+        self.disconnect_btn = ttk.Button(row2, text="Disconnect", command=self._on_disconnect_click, state=tk.DISABLED)
         self.disconnect_btn.pack(side=tk.LEFT, padx=5)
 
     def _on_connect_click(self):
