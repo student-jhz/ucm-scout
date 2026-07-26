@@ -153,6 +153,8 @@ class Step2Panel(ttk.Frame):
         self._running = False
         self.run_btn.configure(state=tk.NORMAL)
         self.stop_btn.configure(state=tk.DISABLED)
+        self.progress["value"] = 0
+        self.progress_label.configure(text="0%")
         if result:
             self.full_result_var.set(f"Full Prefill TTFT: {result.get('full_prefill_ttft_ms', 0):.2f} ms")
             self.hbm_result_var.set(f"HBM PC TTFT: {result.get('hbm_pc_ttft_ms', 0):.2f} ms")

@@ -125,6 +125,8 @@ class Step1Panel(ttk.Frame):
         self._running = False
         self.run_btn.configure(state=tk.NORMAL)
         self.stop_btn.configure(state=tk.DISABLED)
+        self.progress["value"] = 0
+        self.progress_label.configure(text="0%")
         if result:
             bw = result.get("bandwidth_gbs", 0)
             self.result_var.set(f"Actual Bandwidth: {bw:.2f} GB/s")
