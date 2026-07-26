@@ -6,7 +6,7 @@ UCM 运行环境带宽检测、TTFT 测试与收益分析工具。
 
 ### 方式一：直接使用已构建的 EXE（推荐）
 
-从 `dist/ucm_check_tool.exe` 直接双击运行，**无需安装 Python 环境**。
+从 [Releases 页面](https://github.com/student-jhz/ucm-scout/releases) 下载最新版 `ucm_check_tool.exe`，直接双击运行，**无需安装 Python 环境**。
 
 ### 方式二：通过源码运行
 
