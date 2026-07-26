@@ -134,9 +134,9 @@ class ScenarioParamsPanel(ttk.LabelFrame):
     def _build(self):
         row = ttk.Frame(self)
         row.pack(fill=tk.X)
-        self.request_len_entry = LabeledEntry(row, tr("scenario.request_len"), "1024", width=12)
+        self.request_len_entry = LabeledEntry(row, tr("scenario.request_len"), "1024", width=12, label_width=16)
         self.request_len_entry.pack(side=tk.LEFT, padx=(0, 20))
-        self.concurrency_entry = LabeledEntry(row, tr("scenario.concurrency"), "1", width=12)
+        self.concurrency_entry = LabeledEntry(row, tr("scenario.concurrency"), "1", width=12, label_width=14)
         self.concurrency_entry.pack(side=tk.LEFT, padx=(0, 20))
 
     def refresh_language(self):

@@ -24,21 +24,21 @@ class Step3Panel(ttk.Frame):
 
         row1 = ttk.Frame(self.config_frame)
         row1.pack(fill=tk.X, pady=2)
-        self.bw_entry = LabeledEntry(row1, tr("step3.bw"), "")
+        self.bw_entry = LabeledEntry(row1, tr("step3.bw"), "", label_width=20)
         self.bw_entry.pack(side=tk.LEFT, padx=(0, 5))
         self.from_step1_btn = ttk.Button(row1, text=tr("step3.from_step1"), command=self._auto_fill_bw, width=10)
         self.from_step1_btn.pack(side=tk.LEFT)
 
         row2 = ttk.Frame(self.config_frame)
         row2.pack(fill=tk.X, pady=2)
-        self.full_ttft_entry = LabeledEntry(row2, tr("step3.full_ttft"), "")
+        self.full_ttft_entry = LabeledEntry(row2, tr("step3.full_ttft"), "", label_width=24)
         self.full_ttft_entry.pack(side=tk.LEFT, padx=(0, 5))
         self.from_step2_btn = ttk.Button(row2, text=tr("step3.from_step2"), command=self._auto_fill_ttft, width=10)
         self.from_step2_btn.pack(side=tk.LEFT)
 
         row3 = ttk.Frame(self.config_frame)
         row3.pack(fill=tk.X, pady=2)
-        self.hbm_ttft_entry = LabeledEntry(row3, tr("step3.hbm_ttft"), "")
+        self.hbm_ttft_entry = LabeledEntry(row3, tr("step3.hbm_ttft"), "", label_width=20)
         self.hbm_ttft_entry.pack(side=tk.LEFT, padx=(0, 5))
 
         row4 = ttk.Frame(self.config_frame)
