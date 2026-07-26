@@ -77,6 +77,9 @@ class Step1Panel(ttk.Frame):
         if not self.app.ssh or not self.app.ssh.connected:
             messagebox.showwarning("Warning", "Please connect to remote host first")
             return
+        if not self.model_dir_entry.get():
+            messagebox.showwarning("Validation Error", "Model Weight Dir is required")
+            return
         self._running = True
         self.run_btn.configure(state=tk.DISABLED)
         self.stop_btn.configure(state=tk.NORMAL)

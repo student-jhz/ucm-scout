@@ -66,6 +66,12 @@ class MainWindow(tk.Tk):
             return
 
         vals = self.ssh_panel.get_values()
+        if not vals["host"]:
+            messagebox.showwarning("Validation Error", "Host is required")
+            return
+        if not vals["password"]:
+            messagebox.showwarning("Validation Error", "Password is required")
+            return
         self._log(f"connecting to {vals['host']}:{vals['port']} as {vals['username']}...")
         self.ssh_panel.set_connecting()
 

@@ -49,6 +49,15 @@ class Step2Panel(ttk.Frame):
         if not self.app.ssh or not self.app.ssh.connected:
             messagebox.showwarning("Warning", "Please connect to remote host first")
             return
+        if not self.service_url_entry.get():
+            messagebox.showwarning("Validation Error", "Service URL is required")
+            return
+        if not self.model_path_entry.get():
+            messagebox.showwarning("Validation Error", "Model Path is required")
+            return
+        if not self.model_name_entry.get():
+            messagebox.showwarning("Validation Error", "Model Name is required")
+            return
         self._running = True
         self.run_btn.configure(state=tk.DISABLED)
         self.stop_btn.configure(state=tk.NORMAL)
