@@ -6,6 +6,8 @@ import os
 from gui.widgets import LabeledEntry, ScrollableLogFrame
 from i18n import tr, on_lang_change
 
+BLOCK_SIZE = 128
+
 
 class Step1Panel(ttk.Frame):
     def __init__(self, parent, app, **kwargs):
@@ -14,6 +16,8 @@ class Step1Panel(ttk.Frame):
         self._running = False
         self._result_data = None
         self._run_state = "idle"
+        self._shard_size = 0
+        self._shard_number = 0
         self._build()
         on_lang_change(self.refresh_language)
 
@@ -21,31 +25,58 @@ class Step1Panel(ttk.Frame):
         self.config_frame = ttk.LabelFrame(self, text=tr("step1.config"), padding=10)
         self.config_frame.pack(fill=tk.X, padx=5, pady=5)
 
+        row0 = ttk.Frame(self.config_frame)
+        row0.pack(fill=tk.X, pady=2)
+        self.model_dir_entry = LabeledEntry(row0, tr("step1.model_dir"), "/models/llama-7b")
+        self.model_dir_entry.pack(side=tk.LEFT, padx=(0, 5))
+        self.browse_model_btn = ttk.Button(row0, text=tr("step1.browse"), width=8,
+                                            command=self._browse_model)
+        self.browse_model_btn.pack(side=tk.LEFT)
+        self.model_dir_entry.entry.bind("<FocusOut>", lambda e: self._on_model_change())
+
         row1 = ttk.Frame(self.config_frame)
         row1.pack(fill=tk.X, pady=2)
-        self.model_dir_entry = LabeledEntry(row1, tr("step1.model_dir"), "/models/llama-7b")
-        self.model_dir_entry.pack(side=tk.LEFT, padx=(0, 5))
-        self.browse_model_btn = ttk.Button(row1, text=tr("step1.browse"), width=8, command=self._browse_model)
-        self.browse_model_btn.pack(side=tk.LEFT)
+        self.docker_var = tk.StringVar()
+        self.docker_combo = ttk.Combobox(row1, textvariable=self.docker_var,
+                                          state="readonly", width=42)
+        self.docker_combo.pack(side=tk.LEFT, padx=(0, 5))
+        self.docker_refresh_btn = ttk.Button(row1, text=tr("step1.docker_refresh"),
+                                              command=self._refresh_images, width=6)
+        self.docker_refresh_btn.pack(side=tk.LEFT)
 
         row2 = ttk.Frame(self.config_frame)
         row2.pack(fill=tk.X, pady=2)
-        self.dp_entry = LabeledEntry(row2, tr("step1.dp"), "1", width=8)
-        self.dp_entry.pack(side=tk.LEFT, padx=(0, 20))
-        self.tp_entry = LabeledEntry(row2, tr("step1.tp"), "1", width=8)
-        self.tp_entry.pack(side=tk.LEFT, padx=(0, 20))
+        self.ucm_pkg_entry = LabeledEntry(row2, tr("step1.ucm_pkg"), "", width=36)
+        self.ucm_pkg_entry.pack(side=tk.LEFT, padx=(0, 5))
+        self.browse_pkg_btn = ttk.Button(row2, text=tr("step1.browse"), width=8,
+                                          command=self._browse_pkg)
+        self.browse_pkg_btn.pack(side=tk.LEFT)
 
         row3 = ttk.Frame(self.config_frame)
         row3.pack(fill=tk.X, pady=2)
-        self.kv_dir_entry = LabeledEntry(row3, tr("step1.kv_dir"), "/data/kvcache")
-        self.kv_dir_entry.pack(side=tk.LEFT, padx=(0, 5))
+        self.ucm_dep_entry = LabeledEntry(row3, tr("step1.ucm_dep"), "", width=36)
+        self.ucm_dep_entry.pack(side=tk.LEFT, padx=(0, 5))
+        self.browse_dep_btn = ttk.Button(row3, text=tr("step1.browse"), width=8,
+                                          command=self._browse_dep)
+        self.browse_dep_btn.pack(side=tk.LEFT)
 
         row4 = ttk.Frame(self.config_frame)
         row4.pack(fill=tk.X, pady=2)
-        self.output_dir_entry = LabeledEntry(row4, tr("step1.output_dir"), "./results/step1")
+        self.storage_entry = LabeledEntry(row4, tr("step1.storage_backend"), "/data/kvcache")
+        self.storage_entry.pack(side=tk.LEFT, padx=(0, 5))
+
+        row5 = ttk.Frame(self.config_frame)
+        row5.pack(fill=tk.X, pady=2)
+        self.output_dir_entry = LabeledEntry(row5, tr("step1.output_dir"), "./results/step1")
         self.output_dir_entry.pack(side=tk.LEFT, padx=(0, 5))
-        self.browse_output_btn = ttk.Button(row4, text=tr("step1.browse"), width=8, command=self._browse_output)
+        self.browse_output_btn = ttk.Button(row5, text=tr("step1.browse"), width=8,
+                                             command=self._browse_output)
         self.browse_output_btn.pack(side=tk.LEFT)
+
+        self.shard_info_var = tk.StringVar(value="")
+        self.shard_info_label = ttk.Label(self.config_frame, textvariable=self.shard_info_var,
+                                           font=("", 9, "italic"), foreground="gray")
+        self.shard_info_label.pack(anchor=tk.W, pady=(5, 0))
 
         btn_frame = ttk.Frame(self)
         btn_frame.pack(fill=tk.X, padx=5, pady=5)
@@ -72,11 +103,66 @@ class Step1Panel(ttk.Frame):
         path = filedialog.askdirectory(title=tr("step1.browse_model_title"))
         if path:
             self.model_dir_entry.set(path)
+            self._on_model_change()
 
     def _browse_output(self):
         path = filedialog.askdirectory(title=tr("step1.browse_output_title"))
         if path:
             self.output_dir_entry.set(path)
+
+    def _browse_pkg(self):
+        path = filedialog.askopenfilename(
+            title=tr("step1.browse_pkg_title"),
+            filetypes=[("Tar Gzip", "*.tar.gz"), ("All Files", "*.*")])
+        if path:
+            self.ucm_pkg_entry.set(path)
+
+    def _browse_dep(self):
+        path = filedialog.askopenfilename(
+            title=tr("step1.browse_dep_title"),
+            filetypes=[("Wheel", "*.whl"), ("All Files", "*.*")])
+        if path:
+            self.ucm_dep_entry.set(path)
+
+    def _refresh_images(self):
+        if not self.app.ssh or not self.app.ssh.connected:
+            messagebox.showinfo(tr("title.info"), tr("msg.docker_refresh_hint"))
+            return
+        from core.ucm_bandwidth import UcmBandwidthController
+        ctrl = UcmBandwidthController(self.app.ssh)
+        images = ctrl.get_docker_images()
+        if images:
+            self.docker_combo["values"] = images
+            self.docker_var.set(images[0])
+            self._log(f"[docker] found {len(images)} image(s): {', '.join(images)}")
+        else:
+            messagebox.showinfo(tr("title.info"),
+                                "No vllm images found. Try a different filter.")
+
+    def _on_model_change(self):
+        model_path = self.model_dir_entry.get()
+        if not model_path or not self.app.ssh or not self.app.ssh.connected:
+            return
+        from core.ucm_bandwidth import UcmBandwidthController
+        ctrl = UcmBandwidthController(self.app.ssh)
+        cfg = ctrl.parse_model_config(model_path)
+        if cfg:
+            self._shard_size, self._shard_number = cfg
+        else:
+            self._shard_size, self._shard_number = 0, 0
+        self._update_shard_info()
+
+    def _update_shard_info(self):
+        req_len = self.app.scenario_params.get_request_len()
+        blocks = max(1, req_len // BLOCK_SIZE)
+        if self._shard_size > 0:
+            self.shard_info_var.set(tr("step1.shard_info",
+                size=self._shard_size,
+                size_kb=self._shard_size / 1024,
+                num=self._shard_number,
+                blocks=blocks))
+        else:
+            self.shard_info_var.set("shard: (config.json not parsed) | blocks: " + str(blocks))
 
     def _on_run(self):
         if not self.app.ssh or not self.app.ssh.connected:
@@ -84,6 +170,18 @@ class Step1Panel(ttk.Frame):
             return
         if not self.model_dir_entry.get():
             messagebox.showwarning(tr("title.validation_error"), tr("msg.no_model_dir"))
+            return
+        if not self.docker_var.get():
+            messagebox.showwarning(tr("title.validation_error"), tr("msg.no_docker_image"))
+            return
+        if not self.ucm_pkg_entry.get():
+            messagebox.showwarning(tr("title.validation_error"), tr("msg.no_ucm_pkg"))
+            return
+        if not self.ucm_dep_entry.get():
+            messagebox.showwarning(tr("title.validation_error"), tr("msg.no_ucm_dep"))
+            return
+        if not self.storage_entry.get():
+            messagebox.showwarning(tr("title.validation_error"), tr("msg.no_storage_backend"))
             return
         self._running = True
         self._run_state = "running"
@@ -102,7 +200,7 @@ class Step1Panel(ttk.Frame):
         self.log_frame.append(tr("step1.stopped"))
 
     def _run_test(self):
-        from core.bandwidth_test import BandwidthTestController
+        from core.ucm_bandwidth import UcmBandwidthController
 
         def log(msg):
             self.after(0, lambda: self.log_frame.append(msg))
@@ -112,16 +210,15 @@ class Step1Panel(ttk.Frame):
         def progress(pct, msg):
             self.after(0, lambda: self._update_progress(pct, msg))
 
-        controller = BandwidthTestController(self.app.ssh, log, progress)
-        output_dir = self.output_dir_entry.get() or "./results/step1"
+        controller = UcmBandwidthController(self.app.ssh, log, progress)
         result = controller.run(
-            model_weight_dir=self.model_dir_entry.get(),
-            dp=int(self.dp_entry.get() or 1),
-            tp=int(self.tp_entry.get() or 1),
-            kv_cache_dir=self.kv_dir_entry.get(),
+            model_path=self.model_dir_entry.get(),
+            docker_image=self.docker_var.get(),
+            ucm_pkg_local=self.ucm_pkg_entry.get(),
+            dep_whl_local=self.ucm_dep_entry.get(),
+            storage_backend=self.storage_entry.get(),
             request_len=self.app.scenario_params.get_request_len(),
-            concurrency=self.app.scenario_params.get_concurrency(),
-            output_dir=output_dir,
+            output_dir=self.output_dir_entry.get() or "./results/step1",
         )
 
         self.after(0, lambda: self._on_finish(result))
@@ -137,7 +234,10 @@ class Step1Panel(ttk.Frame):
         self.progress["value"] = 0
         self.progress_label.configure(text="0%")
         if result:
-            self._result_data = {"bw": result.get("bandwidth_gbs", 0)}
+            self._result_data = {
+                "dump_bw": result.get("dump_avg_bw_gbs", 0),
+                "load_bw": result.get("load_avg_bw_gbs", 0),
+            }
             self._run_state = "success"
             self._format_result()
         else:
@@ -147,20 +247,31 @@ class Step1Panel(ttk.Frame):
 
     def _format_result(self):
         if self._result_data:
-            self.result_var.set(tr("step1.bandwidth_result", bw=self._result_data["bw"]))
+            d = self._result_data
+            text = tr("step1.dump_bw", v=d["dump_bw"]) + " | " + tr("step1.load_bw", v=d["load_bw"])
+            self.result_var.set(text)
+
+    def _log(self, msg):
+        self.log_frame.append(msg)
+        if self.app.log_mgr:
+            self.app.log_mgr.log(msg)
 
     def refresh_language(self):
         self.config_frame.configure(text=tr("step1.config"))
         self.model_dir_entry.set_label(tr("step1.model_dir"))
         self.browse_model_btn.configure(text=tr("step1.browse"))
-        self.dp_entry.set_label(tr("step1.dp"))
-        self.tp_entry.set_label(tr("step1.tp"))
-        self.kv_dir_entry.set_label(tr("step1.kv_dir"))
+        self.docker_refresh_btn.configure(text=tr("step1.docker_refresh"))
+        self.ucm_pkg_entry.set_label(tr("step1.ucm_pkg"))
+        self.browse_pkg_btn.configure(text=tr("step1.browse"))
+        self.ucm_dep_entry.set_label(tr("step1.ucm_dep"))
+        self.browse_dep_btn.configure(text=tr("step1.browse"))
+        self.storage_entry.set_label(tr("step1.storage_backend"))
         self.output_dir_entry.set_label(tr("step1.output_dir"))
         self.browse_output_btn.configure(text=tr("step1.browse"))
         self.run_btn.configure(text=tr("step1.run"))
         self.stop_btn.configure(text=tr("step1.stop"))
         self.result_frame.configure(text=tr("step1.result"))
+        self._update_shard_info()
         if self._running:
             pass
         elif self._result_data:
@@ -171,6 +282,8 @@ class Step1Panel(ttk.Frame):
             self.result_var.set(tr("step1.default_result"))
 
     def get_bandwidth(self):
+        if self._result_data:
+            return self._result_data.get("load_bw")
         text = self.result_var.get()
         import re
         m = re.search(r"([\d.]+)\s*GB/s", text)

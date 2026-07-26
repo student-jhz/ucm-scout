@@ -32,6 +32,70 @@ class MockSSHClient:
         if "echo ok" in command and "uname" in command:
             return 0, "Linux demo-host 5.15.0-generic x86_64 GNU/Linux\n", ""
 
+        if "docker images" in command:
+            return 0, "nvidia/cuda:12.1-vllm\nvllm/vllm-openai:latest\nvllm-ascend:0.6.0\n", ""
+
+        if "config.json" in command and "cat" in command:
+            model_config = json.dumps({
+                "model_type": "llama",
+                "num_hidden_layers": 32,
+                "num_attention_heads": 32,
+                "num_key_value_heads": 8,
+                "head_dim": 128,
+                "hidden_size": 4096,
+                "torch_dtype": "float16",
+            })
+            return 0, model_config, ""
+
+        if "mkdir" in command and "ucm_pkgs" in command:
+            return 0, "", ""
+
+        if "docker run" in command and "sleep infinity" in command:
+            return 0, "demo-container-001\n", ""
+
+        if "docker exec" in command and "pip install" in command:
+            if on_stdout:
+                on_stdout("Successfully installed unified-cache-management")
+            return 0, "Successfully installed\n", ""
+
+        if "docker exec" in command and "python3" in command and "ucm_bench.py" in command:
+            if on_stdout:
+                on_stdout("[demo] running UCM benchmark...")
+            time.sleep(1.0)
+            result = {
+                "shard_size": 288,
+                "shard_number": 32,
+                "block_number": 8,
+                "total_size_bytes": 288 * 32 * 8,
+                "dump_epochs": 8,
+                "load_epochs": 8,
+                "dump_avg_bw_gbs": random.uniform(2.5, 4.0),
+                "dump_p99_bw_gbs": random.uniform(2.0, 3.5),
+                "load_avg_bw_gbs": random.uniform(3.0, 5.0),
+                "load_p99_bw_gbs": random.uniform(2.5, 4.5),
+            }
+            result_text = json.dumps(result, indent=2)
+            if on_stdout:
+                on_stdout(result_text)
+            return 0, result_text, ""
+
+        if "cat" in command and "ucm_bench_result.json" in command:
+            return 0, json.dumps({
+                "shard_size": 288,
+                "shard_number": 32,
+                "block_number": 8,
+                "total_size_bytes": 288 * 32 * 8,
+                "dump_epochs": 8,
+                "load_epochs": 8,
+                "dump_avg_bw_gbs": 3.2,
+                "dump_p99_bw_gbs": 2.8,
+                "load_avg_bw_gbs": 4.1,
+                "load_p99_bw_gbs": 3.6,
+            }), ""
+
+        if "docker stop" in command:
+            return 0, "demo-container-001\n", ""
+
         if "torch.cuda" in command:
             return 0, "True\n", ""
 
@@ -58,15 +122,12 @@ class MockSSHClient:
             if on_stdout:
                 on_stdout("[demo] starting benchmark...")
             time.sleep(1.5)
-
             match_concurrency = re.search(r"--concurrency\s+(\d+)", command)
             concurrency = int(match_concurrency.group(1)) if match_concurrency else 1
-
             tokens_per_second = random.uniform(1800, 2500) * concurrency
             elapsed = random.uniform(0.3, 0.8) / max(concurrency, 1)
             total_tokens = int(tokens_per_second * elapsed)
             bandwidth_gbs = tokens_per_second * 8 * 2 / 1e9
-
             result = {
                 "model": "demo-model-7b",
                 "request_len": 1024,
