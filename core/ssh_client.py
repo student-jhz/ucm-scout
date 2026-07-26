@@ -15,7 +15,9 @@ class SSHClient:
         self._sftp = None
         self._connected = False
 
-    def connect(self):
+    def connect(self, timeout=None):
+        if timeout is None:
+            timeout = DEFAULT_SSH_TIMEOUT
         self._client = paramiko.SSHClient()
         self._client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         self._client.connect(
@@ -23,7 +25,7 @@ class SSHClient:
             port=self.port,
             username=self.username,
             password=self.password,
-            timeout=DEFAULT_SSH_TIMEOUT,
+            timeout=timeout,
             allow_agent=False,
             look_for_keys=False,
         )

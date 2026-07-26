@@ -76,6 +76,11 @@ class SSHConnectionPanel(ttk.LabelFrame):
         if self.on_connect:
             self.on_connect(disconnect=True)
 
+    def set_connecting(self):
+        self.status_label.configure(text="connecting...", foreground="orange")
+        self.connect_btn.configure(state=tk.DISABLED)
+        self.disconnect_btn.configure(state=tk.DISABLED)
+
     def set_connected(self, connected):
         if connected:
             self.status_label.configure(text="connected", foreground="green")

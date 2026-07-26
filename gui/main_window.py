@@ -67,11 +67,12 @@ class MainWindow(tk.Tk):
 
         vals = self.ssh_panel.get_values()
         self._log(f"connecting to {vals['host']}:{vals['port']} as {vals['username']}...")
+        self.ssh_panel.set_connecting()
 
         def _connect():
             client = SSHClient(vals["host"], vals["port"], vals["username"], vals["password"])
             try:
-                client.connect()
+                client.connect(timeout=10)
                 ok, info = client.test_connection()
                 if ok:
                     self.ssh = client
