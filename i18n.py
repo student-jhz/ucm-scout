@@ -1,0 +1,240 @@
+_translations = {
+    "zh": {
+        "app.title": "UCM-Scout - 带宽与TTFT分析",
+
+        "lang.label": "语言:",
+        "lang.zh": "中文",
+        "lang.en": "English",
+
+        "ssh.panel": "SSH 连接",
+        "ssh.host": "主机:",
+        "ssh.port": "端口:",
+        "ssh.user": "用户:",
+        "ssh.pwd": "密码:",
+        "ssh.connect": "连接",
+        "ssh.disconnect": "断开连接",
+        "ssh.disconnected": "未连接",
+        "ssh.connected": "已连接",
+        "ssh.connecting": "连接中...",
+
+        "scenario.panel": "场景参数（共享）",
+        "scenario.request_len": "请求长度:",
+        "scenario.concurrency": "并发数:",
+
+        "step1.tab": "Step 1: 带宽测试",
+        "step1.config": "带宽测试配置",
+        "step1.model_dir": "模型权重目录:",
+        "step1.browse": "浏览...",
+        "step1.dp": "DP 数量:",
+        "step1.tp": "TP 数量:",
+        "step1.kv_dir": "KV Cache 目录:",
+        "step1.output_dir": "输出目录:",
+        "step1.run": "执行带宽测试",
+        "step1.stop": "停止",
+        "step1.result": "结果",
+        "step1.running": "运行中...",
+        "step1.default_result": "--",
+        "step1.bandwidth_result": "实际带宽: {bw:.2f} GB/s",
+        "step1.failed": "测试失败或无结果",
+        "step1.stopped": "用户已停止",
+        "step1.browse_model_title": "选择模型权重目录",
+        "step1.browse_output_title": "选择输出目录",
+
+        "step2.tab": "Step 2: TTFT 测试",
+        "step2.config": "测试配置",
+        "step2.service_url": "服务地址:",
+        "step2.model_path": "模型路径:",
+        "step2.model_name": "模型名称:",
+        "step2.run": "执行 TTFT 测试",
+        "step2.stop": "停止",
+        "step2.results": "结果",
+        "step2.full_result_default": "完全预填充 TTFT: -- ms",
+        "step2.hbm_result_default": "HBM PC TTFT: -- ms",
+        "step2.full_result": "完全预填充 TTFT: {v:.2f} ms",
+        "step2.hbm_result": "HBM PC TTFT: {v:.2f} ms",
+        "step2.full_failed": "完全预填充 TTFT: -- ms（失败）",
+        "step2.hbm_failed": "HBM PC TTFT: -- ms（失败）",
+        "step2.stopped": "用户已停止",
+
+        "step3.tab": "Step 3: 收益分析",
+        "step3.config": "输入参数",
+        "step3.hint": "填写带宽和TTFT数据，或从 Step1 与 Step2 结果中自动填充:",
+        "step3.bw": "带宽 (GB/s):",
+        "step3.full_ttft": "完全预填充 TTFT (ms):",
+        "step3.hbm_ttft": "HBM PC TTFT (ms):",
+        "step3.output_dir": "输出目录:",
+        "step3.from_step1": "来自 Step1",
+        "step3.from_step2": "来自 Step2",
+        "step3.analyze": "分析",
+        "step3.result_title": "分析结果",
+        "step3.range_default": "UCM PC TTFT 范围: --",
+        "step3.avg_default": "平均 TTFT: --",
+        "step3.ratio_default": "TTFT 比值: --",
+        "step3.range": "UCM PC TTFT 范围: [{lo:.2f}, {hi:.2f}] ms",
+        "step3.avg": "平均 UCM PC TTFT: {v:.2f} ms",
+        "step3.ratio": "TTFT 比值 (Full/HBM_PC): {v:.2f}x",
+
+        "global_log": "全局日志",
+        "status.footer": "日志保存至 ./logs/ | 结果保存至 ./results/",
+
+        "msg.connecting": "正在连接 {host}:{port} 用户 {user}...",
+        "msg.ssh_disconnected": "SSH 已断开",
+        "msg.connected": "已连接: {info}",
+        "msg.connect_failed": "连接测试失败: {info}",
+        "msg.ssh_error": "SSH 错误: {e}",
+        "msg.host_required": "主机为必填项",
+        "msg.user_required": "用户名为必填项",
+        "msg.pwd_required": "密码为必填项",
+        "msg.no_ssh": "请先连接远程主机",
+        "msg.no_model_dir": "模型权重目录为必填项",
+        "msg.no_service_url": "服务地址为必填项",
+        "msg.no_model_path": "模型路径为必填项",
+        "msg.no_model_name": "模型名称为必填项",
+        "msg.invalid_numbers": "请输入有效数字",
+        "msg.step1_no_bw": "Step 1 没有带宽结果，请先运行 Step 1 或手动输入。",
+        "msg.step2_no_ttft": "Step 2 没有 TTFT 结果，请先运行 Step 2 或手动输入。",
+        "msg.analysis_done": "分析完成",
+
+        "title.validation_error": "参数校验错误",
+        "title.warning": "警告",
+        "title.connection_error": "连接错误",
+        "title.error": "错误",
+        "title.info": "提示",
+        "title.analysis_complete": "分析完成",
+    },
+    "en": {
+        "app.title": "UCM-Scout - Bandwidth & TTFT Analysis",
+
+        "lang.label": "Language:",
+        "lang.zh": "Chinese",
+        "lang.en": "English",
+
+        "ssh.panel": "SSH Connection",
+        "ssh.host": "Host:",
+        "ssh.port": "Port:",
+        "ssh.user": "User:",
+        "ssh.pwd": "Pwd:",
+        "ssh.connect": "Connect",
+        "ssh.disconnect": "Disconnect",
+        "ssh.disconnected": "disconnected",
+        "ssh.connected": "connected",
+        "ssh.connecting": "connecting...",
+
+        "scenario.panel": "Scenario Parameters (shared)",
+        "scenario.request_len": "Request Length:",
+        "scenario.concurrency": "Concurrency:",
+
+        "step1.tab": "Step 1: Bandwidth Test",
+        "step1.config": "Bandwidth Test Configuration",
+        "step1.model_dir": "Model Weight Dir:",
+        "step1.browse": "Browse...",
+        "step1.dp": "DP Count:",
+        "step1.tp": "TP Count:",
+        "step1.kv_dir": "KV Cache Dir:",
+        "step1.output_dir": "Output Dir:",
+        "step1.run": "Execute Bandwidth Test",
+        "step1.stop": "Stop",
+        "step1.result": "Result",
+        "step1.running": "Running...",
+        "step1.default_result": "--",
+        "step1.bandwidth_result": "Actual Bandwidth: {bw:.2f} GB/s",
+        "step1.failed": "Test failed or no result",
+        "step1.stopped": "STOPPED by user",
+        "step1.browse_model_title": "Select Model Weight Directory",
+        "step1.browse_output_title": "Select Output Directory",
+
+        "step2.tab": "Step 2: TTFT Test",
+        "step2.config": "Configuration",
+        "step2.service_url": "Service URL:",
+        "step2.model_path": "Model Path:",
+        "step2.model_name": "Model Name:",
+        "step2.run": "Execute TTFT Test",
+        "step2.stop": "Stop",
+        "step2.results": "Results",
+        "step2.full_result_default": "Full Prefill TTFT: -- ms",
+        "step2.hbm_result_default": "HBM PC TTFT: -- ms",
+        "step2.full_result": "Full Prefill TTFT: {v:.2f} ms",
+        "step2.hbm_result": "HBM PC TTFT: {v:.2f} ms",
+        "step2.full_failed": "Full Prefill TTFT: -- ms (failed)",
+        "step2.hbm_failed": "HBM PC TTFT: -- ms (failed)",
+        "step2.stopped": "STOPPED by user",
+
+        "step3.tab": "Step 3: Analysis",
+        "step3.config": "Input Parameters",
+        "step3.hint": "Fill in bandwidth and TTFT data, or auto-fill from Step 1 & Step 2 results:",
+        "step3.bw": "Bandwidth (GB/s):",
+        "step3.full_ttft": "Full Prefill TTFT (ms):",
+        "step3.hbm_ttft": "HBM PC TTFT (ms):",
+        "step3.output_dir": "Output Dir:",
+        "step3.from_step1": "From Step1",
+        "step3.from_step2": "From Step2",
+        "step3.analyze": "Analyze",
+        "step3.result_title": "Analysis Result",
+        "step3.range_default": "UCM PC TTFT Range: --",
+        "step3.avg_default": "Avg TTFT: --",
+        "step3.ratio_default": "TTFT Ratio: --",
+        "step3.range": "UCM PC TTFT Range: [{lo:.2f}, {hi:.2f}] ms",
+        "step3.avg": "Avg UCM PC TTFT: {v:.2f} ms",
+        "step3.ratio": "TTFT Ratio (Full/HBM_PC): {v:.2f}x",
+
+        "global_log": "Global Log",
+        "status.footer": "Logs saved to ./logs/ | Results saved to ./results/",
+
+        "msg.connecting": "connecting to {host}:{port} as {user}...",
+        "msg.ssh_disconnected": "SSH disconnected",
+        "msg.connected": "connected: {info}",
+        "msg.connect_failed": "connection test failed: {info}",
+        "msg.ssh_error": "SSH error: {e}",
+        "msg.host_required": "Host is required",
+        "msg.user_required": "Username is required",
+        "msg.pwd_required": "Password is required",
+        "msg.no_ssh": "Please connect to remote host first",
+        "msg.no_model_dir": "Model Weight Dir is required",
+        "msg.no_service_url": "Service URL is required",
+        "msg.no_model_path": "Model Path is required",
+        "msg.no_model_name": "Model Name is required",
+        "msg.invalid_numbers": "Please enter valid numbers",
+        "msg.step1_no_bw": "No bandwidth result from Step 1. Run Step 1 first or enter manually.",
+        "msg.step2_no_ttft": "No TTFT results from Step 2. Run Step 2 first or enter manually.",
+        "msg.analysis_done": "Analysis Complete",
+
+        "title.validation_error": "Validation Error",
+        "title.warning": "Warning",
+        "title.connection_error": "Connection Error",
+        "title.error": "Error",
+        "title.info": "Info",
+        "title.analysis_complete": "Analysis Complete",
+    },
+}
+
+
+class Translator:
+    def __init__(self):
+        self._lang = "en"
+        self._listeners = []
+
+    def tr(self, key, **fmt):
+        text = _translations.get(self._lang, {}).get(key, key)
+        if fmt:
+            text = text.format(**fmt)
+        return text
+
+    def set_lang(self, lang):
+        if lang in _translations:
+            self._lang = lang
+            for fn in self._listeners:
+                fn()
+
+    def get_lang(self):
+        return self._lang
+
+    def on_lang_change(self, fn):
+        self._listeners.append(fn)
+
+
+_t = Translator()
+
+tr = _t.tr
+set_lang = _t.set_lang
+get_lang = _t.get_lang
+on_lang_change = _t.on_lang_change

@@ -3,64 +3,70 @@ from tkinter import ttk, messagebox
 import os
 
 from gui.widgets import LabeledEntry, ScrollableLogFrame
+from i18n import tr, on_lang_change
 
 
 class Step3Panel(ttk.Frame):
     def __init__(self, parent, app, **kwargs):
         super().__init__(parent, **kwargs)
         self.app = app
+        self._result_data = None
         self._build()
+        on_lang_change(self.refresh_language)
 
     def _build(self):
-        config_frame = ttk.LabelFrame(self, text="Input Parameters", padding=10)
-        config_frame.pack(fill=tk.X, padx=5, pady=5)
+        self.config_frame = ttk.LabelFrame(self, text=tr("step3.config"), padding=10)
+        self.config_frame.pack(fill=tk.X, padx=5, pady=5)
 
-        ttk.Label(config_frame, text="Fill in bandwidth and TTFT data, or auto-fill from Step 1 & Step 2 results:",
-                  font=("", 9, "italic")).pack(anchor=tk.W, pady=(0, 5))
+        self.hint_label = ttk.Label(self.config_frame, text=tr("step3.hint"),
+                                    font=("", 9, "italic"))
+        self.hint_label.pack(anchor=tk.W, pady=(0, 5))
 
-        row1 = ttk.Frame(config_frame)
+        row1 = ttk.Frame(self.config_frame)
         row1.pack(fill=tk.X, pady=2)
-        self.bw_entry = LabeledEntry(row1, "Bandwidth (GB/s):", "")
+        self.bw_entry = LabeledEntry(row1, tr("step3.bw"), "")
         self.bw_entry.pack(side=tk.LEFT, padx=(0, 5))
-        ttk.Button(row1, text="From Step1", command=self._auto_fill_bw, width=10).pack(side=tk.LEFT)
+        self.from_step1_btn = ttk.Button(row1, text=tr("step3.from_step1"), command=self._auto_fill_bw, width=10)
+        self.from_step1_btn.pack(side=tk.LEFT)
 
-        row2 = ttk.Frame(config_frame)
+        row2 = ttk.Frame(self.config_frame)
         row2.pack(fill=tk.X, pady=2)
-        self.full_ttft_entry = LabeledEntry(row2, "Full Prefill TTFT (ms):", "")
+        self.full_ttft_entry = LabeledEntry(row2, tr("step3.full_ttft"), "")
         self.full_ttft_entry.pack(side=tk.LEFT, padx=(0, 5))
-        ttk.Button(row2, text="From Step2", command=self._auto_fill_ttft, width=10).pack(side=tk.LEFT)
+        self.from_step2_btn = ttk.Button(row2, text=tr("step3.from_step2"), command=self._auto_fill_ttft, width=10)
+        self.from_step2_btn.pack(side=tk.LEFT)
 
-        row3 = ttk.Frame(config_frame)
+        row3 = ttk.Frame(self.config_frame)
         row3.pack(fill=tk.X, pady=2)
-        self.hbm_ttft_entry = LabeledEntry(row3, "HBM PC TTFT (ms):", "")
+        self.hbm_ttft_entry = LabeledEntry(row3, tr("step3.hbm_ttft"), "")
         self.hbm_ttft_entry.pack(side=tk.LEFT, padx=(0, 5))
 
-        row4 = ttk.Frame(config_frame)
+        row4 = ttk.Frame(self.config_frame)
         row4.pack(fill=tk.X, pady=2)
-        self.output_dir_entry = LabeledEntry(row4, "Output Dir:", "./results/step3")
+        self.output_dir_entry = LabeledEntry(row4, tr("step3.output_dir"), "./results/step3")
         self.output_dir_entry.pack(side=tk.LEFT, padx=(0, 5))
 
         btn_frame = ttk.Frame(self)
         btn_frame.pack(fill=tk.X, padx=5, pady=5)
-        self.analyze_btn = ttk.Button(btn_frame, text="Analyze", command=self._on_analyze)
+        self.analyze_btn = ttk.Button(btn_frame, text=tr("step3.analyze"), command=self._on_analyze)
         self.analyze_btn.pack(side=tk.LEFT, padx=5)
 
         self.log_frame = ScrollableLogFrame(self, height=8)
         self.log_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
 
-        result_frame = ttk.LabelFrame(self, text="Analysis Result", padding=10)
-        result_frame.pack(fill=tk.X, padx=5, pady=5)
+        self.result_frame = ttk.LabelFrame(self, text=tr("step3.result_title"), padding=10)
+        self.result_frame.pack(fill=tk.X, padx=5, pady=5)
 
-        self.ttft_range_var = tk.StringVar(value="UCM PC TTFT Range: --")
-        ttk.Label(result_frame, textvariable=self.ttft_range_var,
+        self.ttft_range_var = tk.StringVar(value=tr("step3.range_default"))
+        ttk.Label(self.result_frame, textvariable=self.ttft_range_var,
                   font=("Consolas", 11, "bold"), foreground="#d4380d").pack(anchor=tk.W, pady=3)
 
-        self.ttft_avg_var = tk.StringVar(value="Avg TTFT: --")
-        ttk.Label(result_frame, textvariable=self.ttft_avg_var,
+        self.ttft_avg_var = tk.StringVar(value=tr("step3.avg_default"))
+        ttk.Label(self.result_frame, textvariable=self.ttft_avg_var,
                   font=("Consolas", 10), foreground="blue").pack(anchor=tk.W, pady=2)
 
-        self.ratio_var = tk.StringVar(value="TTFT Ratio: --")
-        ttk.Label(result_frame, textvariable=self.ratio_var,
+        self.ratio_var = tk.StringVar(value=tr("step3.ratio_default"))
+        ttk.Label(self.result_frame, textvariable=self.ratio_var,
                   font=("Consolas", 10), foreground="green").pack(anchor=tk.W, pady=2)
 
     def _auto_fill_bw(self):
@@ -69,7 +75,7 @@ class Step3Panel(ttk.Frame):
             if bw:
                 self.bw_entry.set(f"{bw:.2f}")
             else:
-                messagebox.showinfo("Info", "No bandwidth result from Step 1. Run Step 1 first or enter manually.")
+                messagebox.showinfo(tr("title.info"), tr("msg.step1_no_bw"))
 
     def _auto_fill_ttft(self):
         if self.app.step2_panel:
@@ -80,7 +86,7 @@ class Step3Panel(ttk.Frame):
             if hbm_ttft:
                 self.hbm_ttft_entry.set(f"{hbm_ttft:.2f}")
             if not full_ttft and not hbm_ttft:
-                messagebox.showinfo("Info", "No TTFT results from Step 2. Run Step 2 first or enter manually.")
+                messagebox.showinfo(tr("title.info"), tr("msg.step2_no_ttft"))
 
     def _on_analyze(self):
         try:
@@ -88,7 +94,7 @@ class Step3Panel(ttk.Frame):
             full_ttft = float(self.full_ttft_entry.get()) if self.full_ttft_entry.get() else 0
             hbm_ttft = float(self.hbm_ttft_entry.get()) if self.hbm_ttft_entry.get() else 0
         except ValueError:
-            messagebox.showerror("Error", "Please enter valid numbers")
+            messagebox.showerror(tr("title.error"), tr("msg.invalid_numbers"))
             return
 
         self.log_frame.clear()
@@ -108,10 +114,44 @@ class Step3Panel(ttk.Frame):
         )
 
         if result:
+            self._result_data = {
+                "lo": result["ucm_pc_ttft_range_ms"][0],
+                "hi": result["ucm_pc_ttft_range_ms"][1],
+                "avg": result["ucm_pc_ttft_avg_ms"],
+                "ratio": result["ttft_ratio"],
+            }
+        else:
+            self._result_data = None
+        self._format_result()
+
+        if result:
             rng = result["ucm_pc_ttft_range_ms"]
-            self.ttft_range_var.set(f"UCM PC TTFT Range: [{rng[0]:.2f}, {rng[1]:.2f}] ms")
-            self.ttft_avg_var.set(f"Avg UCM PC TTFT: {result['ucm_pc_ttft_avg_ms']:.2f} ms")
-            self.ratio_var.set(f"TTFT Ratio (Full/HBM_PC): {result['ttft_ratio']:.2f}x")
-            messagebox.showinfo("Analysis Complete",
-                                f"UCM PC TTFT Range: [{rng[0]:.2f}, {rng[1]:.2f}] ms\n"
-                                f"Avg: {result['ucm_pc_ttft_avg_ms']:.2f} ms")
+            messagebox.showinfo(
+                tr("title.analysis_complete"),
+                tr("step3.range", lo=rng[0], hi=rng[1]) + "\n"
+                + tr("step3.avg", v=result["ucm_pc_ttft_avg_ms"]),
+            )
+
+    def _format_result(self):
+        if self._result_data:
+            d = self._result_data
+            self.ttft_range_var.set(tr("step3.range", lo=d["lo"], hi=d["hi"]))
+            self.ttft_avg_var.set(tr("step3.avg", v=d["avg"]))
+            self.ratio_var.set(tr("step3.ratio", v=d["ratio"]))
+        else:
+            self.ttft_range_var.set(tr("step3.range_default"))
+            self.ttft_avg_var.set(tr("step3.avg_default"))
+            self.ratio_var.set(tr("step3.ratio_default"))
+
+    def refresh_language(self):
+        self.config_frame.configure(text=tr("step3.config"))
+        self.hint_label.configure(text=tr("step3.hint"))
+        self.bw_entry.set_label(tr("step3.bw"))
+        self.from_step1_btn.configure(text=tr("step3.from_step1"))
+        self.full_ttft_entry.set_label(tr("step3.full_ttft"))
+        self.from_step2_btn.configure(text=tr("step3.from_step2"))
+        self.hbm_ttft_entry.set_label(tr("step3.hbm_ttft"))
+        self.output_dir_entry.set_label(tr("step3.output_dir"))
+        self.analyze_btn.configure(text=tr("step3.analyze"))
+        self.result_frame.configure(text=tr("step3.result_title"))
+        self._format_result()

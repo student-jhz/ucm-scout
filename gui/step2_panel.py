@@ -3,6 +3,7 @@ from tkinter import ttk, messagebox
 import threading
 
 from gui.widgets import LabeledEntry, ScrollableLogFrame
+from i18n import tr, on_lang_change
 
 
 class Step2Panel(ttk.Frame):
@@ -10,24 +11,26 @@ class Step2Panel(ttk.Frame):
         super().__init__(parent, **kwargs)
         self.app = app
         self._running = False
+        self._result_data = None
         self._build()
+        on_lang_change(self.refresh_language)
 
     def _build(self):
-        config_frame = ttk.LabelFrame(self, text="Online Configuration", padding=10)
-        config_frame.pack(fill=tk.X, padx=5, pady=5)
+        self.config_frame = ttk.LabelFrame(self, text=tr("step2.config"), padding=10)
+        self.config_frame.pack(fill=tk.X, padx=5, pady=5)
 
-        self.service_url_entry = LabeledEntry(config_frame, "Service URL:", "http://192.168.1.100:8000")
+        self.service_url_entry = LabeledEntry(self.config_frame, tr("step2.service_url"), "http://192.168.1.100:8000")
         self.service_url_entry.pack(fill=tk.X, pady=2)
-        self.model_path_entry = LabeledEntry(config_frame, "Model Path:", "/models/llama-7b")
+        self.model_path_entry = LabeledEntry(self.config_frame, tr("step2.model_path"), "/models/llama-7b")
         self.model_path_entry.pack(fill=tk.X, pady=2)
-        self.model_name_entry = LabeledEntry(config_frame, "Model Name:", "llama-7b")
+        self.model_name_entry = LabeledEntry(self.config_frame, tr("step2.model_name"), "llama-7b")
         self.model_name_entry.pack(fill=tk.X, pady=2)
 
         btn_frame = ttk.Frame(self)
         btn_frame.pack(fill=tk.X, padx=5, pady=5)
-        self.run_btn = ttk.Button(btn_frame, text="Execute TTFT Test", command=self._on_run)
+        self.run_btn = ttk.Button(btn_frame, text=tr("step2.run"), command=self._on_run)
         self.run_btn.pack(side=tk.LEFT, padx=5)
-        self.stop_btn = ttk.Button(btn_frame, text="Stop", command=self._on_stop, state=tk.DISABLED)
+        self.stop_btn = ttk.Button(btn_frame, text=tr("step2.stop"), command=self._on_stop, state=tk.DISABLED)
         self.stop_btn.pack(side=tk.LEFT, padx=5)
 
         self.progress = ttk.Progressbar(self, mode="determinate", length=400)
@@ -38,25 +41,29 @@ class Step2Panel(ttk.Frame):
         self.log_frame = ScrollableLogFrame(self, height=8)
         self.log_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
 
-        result_frame = ttk.LabelFrame(self, text="Results", padding=5)
-        result_frame.pack(fill=tk.X, padx=5, pady=5)
-        self.full_result_var = tk.StringVar(value="Full Prefill TTFT: -- ms")
-        ttk.Label(result_frame, textvariable=self.full_result_var, font=("Consolas", 10), foreground="blue").pack(anchor=tk.W, pady=2)
-        self.hbm_result_var = tk.StringVar(value="HBM PC TTFT: -- ms")
-        ttk.Label(result_frame, textvariable=self.hbm_result_var, font=("Consolas", 10), foreground="green").pack(anchor=tk.W, pady=2)
+        self.result_frame = ttk.LabelFrame(self, text=tr("step2.results"), padding=5)
+        self.result_frame.pack(fill=tk.X, padx=5, pady=5)
+        self.full_result_var = tk.StringVar(value=tr("step2.full_result_default"))
+        ttk.Label(self.result_frame, textvariable=self.full_result_var,
+                  font=("Consolas", 10), foreground="blue").pack(anchor=tk.W, pady=2)
+        self.hbm_result_var = tk.StringVar(value=tr("step2.hbm_result_default"))
+        ttk.Label(self.result_frame, textvariable=self.hbm_result_var,
+                  font=("Consolas", 10), foreground="green").pack(anchor=tk.W, pady=2)
+
+        self._result_state = "default"
 
     def _on_run(self):
         if not self.app.ssh or not self.app.ssh.connected:
-            messagebox.showwarning("Warning", "Please connect to remote host first")
+            messagebox.showwarning(tr("title.warning"), tr("msg.no_ssh"))
             return
         if not self.service_url_entry.get():
-            messagebox.showwarning("Validation Error", "Service URL is required")
+            messagebox.showwarning(tr("title.validation_error"), tr("msg.no_service_url"))
             return
         if not self.model_path_entry.get():
-            messagebox.showwarning("Validation Error", "Model Path is required")
+            messagebox.showwarning(tr("title.validation_error"), tr("msg.no_model_path"))
             return
         if not self.model_name_entry.get():
-            messagebox.showwarning("Validation Error", "Model Name is required")
+            messagebox.showwarning(tr("title.validation_error"), tr("msg.no_model_name"))
             return
         self._running = True
         self.run_btn.configure(state=tk.DISABLED)
@@ -70,7 +77,7 @@ class Step2Panel(ttk.Frame):
 
     def _on_stop(self):
         self._running = False
-        self.log_frame.append("STOPPED by user")
+        self.log_frame.append(tr("step2.stopped"))
 
     def _run_online_test(self):
         from core.ttft_test import TTFTTestController
@@ -107,11 +114,36 @@ class Step2Panel(ttk.Frame):
         self.progress["value"] = 0
         self.progress_label.configure(text="0%")
         if result:
-            self.full_result_var.set(f"Full Prefill TTFT: {result.get('full_prefill_ttft_ms', 0):.2f} ms")
-            self.hbm_result_var.set(f"HBM PC TTFT: {result.get('hbm_pc_ttft_ms', 0):.2f} ms")
+            self._result_data = {
+                "full": result.get("full_prefill_ttft_ms", 0),
+                "hbm": result.get("hbm_pc_ttft_ms", 0),
+            }
+            self._result_state = "success"
         else:
-            self.full_result_var.set("Full Prefill TTFT: -- ms (failed)")
-            self.hbm_result_var.set("HBM PC TTFT: -- ms (failed)")
+            self._result_data = None
+            self._result_state = "failed"
+        self._format_result()
+
+    def _format_result(self):
+        if self._result_state == "success" and self._result_data:
+            self.full_result_var.set(tr("step2.full_result", v=self._result_data["full"]))
+            self.hbm_result_var.set(tr("step2.hbm_result", v=self._result_data["hbm"]))
+        elif self._result_state == "failed":
+            self.full_result_var.set(tr("step2.full_failed"))
+            self.hbm_result_var.set(tr("step2.hbm_failed"))
+        else:
+            self.full_result_var.set(tr("step2.full_result_default"))
+            self.hbm_result_var.set(tr("step2.hbm_result_default"))
+
+    def refresh_language(self):
+        self.config_frame.configure(text=tr("step2.config"))
+        self.service_url_entry.set_label(tr("step2.service_url"))
+        self.model_path_entry.set_label(tr("step2.model_path"))
+        self.model_name_entry.set_label(tr("step2.model_name"))
+        self.run_btn.configure(text=tr("step2.run"))
+        self.stop_btn.configure(text=tr("step2.stop"))
+        self.result_frame.configure(text=tr("step2.results"))
+        self._format_result()
 
     def get_full_ttft(self):
         import re
