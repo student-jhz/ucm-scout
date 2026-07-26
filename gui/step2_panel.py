@@ -46,6 +46,9 @@ class Step2Panel(ttk.Frame):
         ttk.Label(result_frame, textvariable=self.hbm_result_var, font=("Consolas", 10), foreground="green").pack(anchor=tk.W, pady=2)
 
     def _on_run(self):
+        if not self.app.ssh or not self.app.ssh.connected:
+            messagebox.showwarning("Warning", "Please connect to remote host first")
+            return
         self._running = True
         self.run_btn.configure(state=tk.DISABLED)
         self.stop_btn.configure(state=tk.NORMAL)
