@@ -24,12 +24,6 @@ class TestTTFTTest(unittest.TestCase):
         self.assertEqual(len(self.logs), 0)
         self.assertEqual(len(self.progresses), 0)
 
-    def test_offline_values(self):
-        result = self.controller.set_offline_values(50.0, 10.0)
-        self.assertEqual(result["mode"], "offline")
-        self.assertEqual(result["full_prefill_ttft_ms"], 50.0)
-        self.assertEqual(result["hbm_pc_ttft_ms"], 10.0)
-
     def test_progress_callback(self):
         self.controller.progress(50, "half done")
         self.assertEqual(self.progresses[-1], (50, "half done"))
@@ -83,7 +77,11 @@ class TestTTFTTest(unittest.TestCase):
         self.assertIn("full_prefill_ttft_ms", result)
 
     def test_save_results(self):
-        self.controller.set_offline_values(100.0, 20.0)
+        self.controller.results = {
+            "mode": "online",
+            "full_prefill_ttft_ms": 100.0,
+            "hbm_pc_ttft_ms": 20.0,
+        }
         import tempfile
         with tempfile.TemporaryDirectory() as tmpdir:
             path = self.controller.save_results(tmpdir)

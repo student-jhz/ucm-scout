@@ -121,15 +121,6 @@ class TTFTTestController:
             pass
         time.sleep(1)
 
-    def set_offline_values(self, full_prefill_ttft, hbm_pc_ttft):
-        self.results = {
-            "mode": "offline",
-            "full_prefill_ttft_ms": full_prefill_ttft,
-            "hbm_pc_ttft_ms": hbm_pc_ttft,
-            "timestamp": datetime.now().isoformat(),
-        }
-        return self.results
-
     def save_results(self, output_dir):
         import os
         os.makedirs(output_dir, exist_ok=True)

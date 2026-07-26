@@ -62,16 +62,7 @@ pyinstaller build.spec --clean
 
 ### Step2 — TTFT 测试
 
-**在线模式**（有已运行的服务）：
-1. 选择 **Online**
-2. 填写服务 URL、模型路径、模型名
-3. 点击 **Execute TTFT Test**
-4. 程序分别测试完全 prefill 计算的 TTFT 和 HBM PC 命中的 TTFT
-
-**离线模式**（无服务，人工录入）：
-1. 选择 **Offline**
-2. 手动填写完全 prefill TTFT 和 HBM PC TTFT（毫秒）
-3. 点击 **Confirm Offline Values** 保存
+填写服务 URL、模型路径、模型名，点击 **Execute TTFT Test**，程序分别测试完全 prefill 计算的 TTFT 和 HBM PC 命中的 TTFT。
 
 ### Step3 — 收益分析
 
