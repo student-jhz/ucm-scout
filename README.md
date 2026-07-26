@@ -44,21 +44,15 @@ pyinstaller build.spec --clean
 ### Step1 — 带宽测试
 
 1. 确保顶部 SSH 已连接（显示绿色 "connected"）
-2. 填写以下参数：
+2. 填写模型权重目录 → 自动解析 `config.json`，计算 `shard_size` 和 `shard_number`
+3. 点击 **Refresh** 获取远端 Docker 镜像列表（自动过滤 vllm 相关镜像）
+4. 选择 UCM 软件包（`.tar.gz`）和依赖包（`.whl`）
+5. 填写存储后端路径
+6. 点击 **Execute Bandwidth Test**
 
-| 参数 | 说明 | 示例 |
-|------|------|------|
-| Model Weight Dir | 远端模型权重目录 | `/models/llama-7b` |
-| DP Count | 数据并行数量 | `1` |
-| TP Count | 张量并行数量 | `1` |
-| KV Cache Dir | KV Cache 保存目录 | `/data/kvcache` |
-| Output Dir | 结果输出目录（本地） | `./results/step1` |
+程序自动：上传包 → 创建临时容器 → 挂载模型/存储路径 → pip 安装 UCM → 执行 `dump_data`/`load_data` 测量 KV cache 读写带宽 → 清理容器
 
-3. 点击 **Execute Bandwidth Test**
-4. 观察进度条和实时日志，等待执行完成
-5. 底部显示**实际带宽 (GB/s)**
-
-> 原理：通过 SSH 在远端启动 vLLM 服务并发送 benchmark 请求，测量实际内存带宽。
+> 带宽测试使用 UCM 底层存储引擎（Posix + AIO），测量 `shard_size × shard_number × block_number` 的 IO 吞吐。
 
 ### Step2 — TTFT 测试
 
