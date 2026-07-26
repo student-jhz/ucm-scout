@@ -39,7 +39,7 @@ exe = EXE(
     a.zipfiles,
     a.datas,
     [],
-    name="ucm_check_tool",
+    name="UCM-Scout",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

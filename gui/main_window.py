@@ -13,7 +13,7 @@ from gui.step3_panel import Step3Panel
 class MainWindow(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title("UCM Check Tool - Bandwidth & TTFT Analysis")
+        self.title("UCM-Scout - Bandwidth & TTFT Analysis")
         self.geometry("900x850")
         self.minsize(800, 700)
 

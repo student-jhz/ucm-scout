@@ -1,4 +1,4 @@
-# UCM Check Tool
+# UCM-Scout
 
 UCM 运行环境带宽检测、TTFT 测试与收益分析工具。
 
