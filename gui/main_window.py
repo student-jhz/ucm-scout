@@ -69,6 +69,9 @@ class MainWindow(tk.Tk):
         if not vals["host"]:
             messagebox.showwarning("Validation Error", "Host is required")
             return
+        if not vals["username"]:
+            messagebox.showwarning("Validation Error", "Username is required")
+            return
         if not vals["password"]:
             messagebox.showwarning("Validation Error", "Password is required")
             return
