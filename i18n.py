@@ -101,6 +101,14 @@ _translations = {
         "title.error": "错误",
         "title.info": "提示",
         "title.analysis_complete": "分析完成",
+
+        "demo.mode": "演示模式",
+        "demo.host": "localhost",
+        "demo.port": "22",
+        "demo.user": "demo",
+        "demo.pwd": "demo",
+        "demo.service_url": "http://127.0.0.1:8000",
+        "demo.local": "（本地模拟）",
     },
     "en": {
         "app.title": "UCM-Scout - Bandwidth & TTFT Analysis",
@@ -204,6 +212,14 @@ _translations = {
         "title.error": "Error",
         "title.info": "Info",
         "title.analysis_complete": "Analysis Complete",
+
+        "demo.mode": "Demo Mode",
+        "demo.host": "localhost",
+        "demo.port": "22",
+        "demo.user": "demo",
+        "demo.pwd": "demo",
+        "demo.service_url": "http://127.0.0.1:8000",
+        "demo.local": "(simulated)",
     },
 }
 

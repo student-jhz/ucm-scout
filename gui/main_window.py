@@ -23,6 +23,7 @@ class MainWindow(tk.Tk):
         self.step1_panel = None
         self.step2_panel = None
         self.step3_panel = None
+        self._demo_mode = False
 
         self._build()
         on_lang_change(self.refresh_language)
@@ -31,6 +32,11 @@ class MainWindow(tk.Tk):
         top_bar = ttk.Frame(self)
         top_bar.pack(fill=tk.X, padx=5, pady=(5, 0))
         self._build_lang_switcher(top_bar)
+
+        self._demo_var = tk.BooleanVar(value=False)
+        self._demo_cb = ttk.Checkbutton(top_bar, text=tr("demo.mode"),
+                                         variable=self._demo_var, command=self._on_demo_toggle)
+        self._demo_cb.pack(side=tk.RIGHT, padx=5)
 
         self.ssh_panel = SSHConnectionPanel(self, on_connect=self._handle_ssh)
         self.ssh_panel.pack(fill=tk.X, padx=5, pady=(5, 0))
@@ -72,11 +78,38 @@ class MainWindow(tk.Tk):
 
     def refresh_language(self):
         self.title(tr("app.title"))
+        self._demo_cb.configure(text=tr("demo.mode"))
         self.notebook.tab(self.step1_panel, text=tr("step1.tab"))
         self.notebook.tab(self.step2_panel, text=tr("step2.tab"))
         self.notebook.tab(self.step3_panel, text=tr("step3.tab"))
         self.log_frame.configure(text=tr("global_log"))
         self.status_label.configure(text=tr("status.footer"))
+
+    def _on_demo_toggle(self):
+        from core.demo import start_demo, stop_demo
+
+        if self._demo_var.get():
+            if self.ssh and self.ssh.connected:
+                self._handle_ssh(disconnect=True)
+            try:
+                start_demo()
+                self._demo_mode = True
+                self._log(f"[Demo] {tr('demo.mode')} ON - {tr('demo.local')}")
+                self.ssh_panel.host_entry.set(tr("demo.host"))
+                self.ssh_panel.port_entry.set(tr("demo.port"))
+                self.ssh_panel.user_entry.set(tr("demo.user"))
+                self.ssh_panel.pwd_entry.set(tr("demo.pwd"))
+                self.step2_panel.service_url_entry.set(tr("demo.service_url"))
+            except Exception as e:
+                self._log(f"[Demo] start failed: {e}")
+                self._demo_var.set(False)
+                self._demo_mode = False
+        else:
+            self._demo_mode = False
+            stop_demo()
+            if self.ssh:
+                self._handle_ssh(disconnect=True)
+            self._log(f"[Demo] {tr('demo.mode')} OFF")
 
     def _handle_ssh(self, disconnect=False):
         if disconnect:
@@ -104,7 +137,12 @@ class MainWindow(tk.Tk):
         self.ssh_panel.set_connecting()
 
         def _connect():
-            client = SSHClient(vals["host"], vals["port"], vals["username"], vals["password"])
+            if self._demo_mode:
+                from core.demo import MockSSHClient
+                client = MockSSHClient(vals["host"], vals["port"], vals["username"], vals["password"])
+            else:
+                client = SSHClient(vals["host"], vals["port"], vals["username"], vals["password"])
+
             try:
                 client.connect(timeout=10)
                 ok, info = client.test_connection()
