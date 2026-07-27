@@ -44,7 +44,7 @@ class Step1Panel(ttk.Frame):
         self.docker_combo.bind("<KeyRelease>", self._filter_images)
         self._all_images = []
         self.docker_refresh_btn = ttk.Button(row1, text=tr("step1.docker_refresh"),
-                                              command=self._refresh_images, width=6)
+                                              command=self._refresh_images, width=8)
         self.docker_refresh_btn.pack(side=tk.LEFT)
 
         row2 = ttk.Frame(self.config_frame)
@@ -67,6 +67,9 @@ class Step1Panel(ttk.Frame):
         row4.pack(fill=tk.X, pady=2)
         self.storage_entry = LabeledEntry(row4, tr("step1.storage_backend"), "/data/kvcache", width=45, label_width=22)
         self.storage_entry.pack(side=tk.LEFT, padx=(0, 5))
+        self.browse_storage_btn = ttk.Button(row4, text=tr("step1.browse"), width=8,
+                                              command=self._browse_storage)
+        self.browse_storage_btn.pack(side=tk.LEFT)
 
         row5 = ttk.Frame(self.config_frame)
         row5.pack(fill=tk.X, pady=2)
@@ -113,6 +116,17 @@ class Step1Panel(ttk.Frame):
         if path:
             self.model_dir_entry.set(path)
             self._on_model_change()
+
+    def _browse_storage(self):
+        if not self.app.ssh or not self.app.ssh.connected:
+            messagebox.showwarning(tr("title.warning"), tr("msg.no_ssh"))
+            return
+        from gui.widgets import RemoteDirBrowser
+        browser = RemoteDirBrowser(self, self.app.ssh,
+                                    title=tr("step1.storage_backend"))
+        path = browser.show()
+        if path:
+            self.storage_entry.set(path)
 
     def _browse_output(self):
         path = filedialog.askdirectory(title=tr("step1.browse_output_title"))
@@ -294,6 +308,7 @@ class Step1Panel(ttk.Frame):
         self.ucm_dep_entry.set_label(tr("step1.ucm_dep"))
         self.browse_dep_btn.configure(text=tr("step1.browse"))
         self.storage_entry.set_label(tr("step1.storage_backend"))
+        self.browse_storage_btn.configure(text=tr("step1.browse"))
         self.output_dir_entry.set_label(tr("step1.output_dir"))
         self.browse_output_btn.configure(text=tr("step1.browse"))
         self.run_btn.configure(text=tr("step1.run"))
