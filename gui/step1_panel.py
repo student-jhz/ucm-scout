@@ -27,7 +27,7 @@ class Step1Panel(ttk.Frame):
 
         row0 = ttk.Frame(self.config_frame)
         row0.pack(fill=tk.X, pady=2)
-        self.model_dir_entry = LabeledEntry(row0, tr("step1.model_dir"), "/models/llama-7b", label_width=22)
+        self.model_dir_entry = LabeledEntry(row0, tr("step1.model_dir"), "/models/llama-7b", width=45, label_width=22)
         self.model_dir_entry.pack(side=tk.LEFT, padx=(0, 5))
         self.browse_model_btn = ttk.Button(row0, text=tr("step1.browse"), width=8,
                                             command=self._browse_model)
@@ -39,16 +39,17 @@ class Step1Panel(ttk.Frame):
         self.docker_label = ttk.Label(row1, text=tr("step1.docker_image"), width=22, anchor=tk.W)
         self.docker_label.pack(side=tk.LEFT, padx=(0, 5))
         self.docker_var = tk.StringVar()
-        self.docker_combo = ttk.Combobox(row1, textvariable=self.docker_var,
-                                          state="readonly", width=30)
+        self.docker_combo = ttk.Combobox(row1, textvariable=self.docker_var, width=45)
         self.docker_combo.pack(side=tk.LEFT, padx=(0, 5))
+        self.docker_combo.bind("<KeyRelease>", self._filter_images)
+        self._all_images = []
         self.docker_refresh_btn = ttk.Button(row1, text=tr("step1.docker_refresh"),
                                               command=self._refresh_images, width=6)
         self.docker_refresh_btn.pack(side=tk.LEFT)
 
         row2 = ttk.Frame(self.config_frame)
         row2.pack(fill=tk.X, pady=2)
-        self.ucm_pkg_entry = LabeledEntry(row2, tr("step1.ucm_pkg"), "", width=30, label_width=22)
+        self.ucm_pkg_entry = LabeledEntry(row2, tr("step1.ucm_pkg"), "", width=45, label_width=22)
         self.ucm_pkg_entry.pack(side=tk.LEFT, padx=(0, 5))
         self.browse_pkg_btn = ttk.Button(row2, text=tr("step1.browse"), width=8,
                                           command=self._browse_pkg)
@@ -56,7 +57,7 @@ class Step1Panel(ttk.Frame):
 
         row3 = ttk.Frame(self.config_frame)
         row3.pack(fill=tk.X, pady=2)
-        self.ucm_dep_entry = LabeledEntry(row3, tr("step1.ucm_dep"), "", width=30, label_width=22)
+        self.ucm_dep_entry = LabeledEntry(row3, tr("step1.ucm_dep"), "", width=45, label_width=22)
         self.ucm_dep_entry.pack(side=tk.LEFT, padx=(0, 5))
         self.browse_dep_btn = ttk.Button(row3, text=tr("step1.browse"), width=8,
                                           command=self._browse_dep)
@@ -64,12 +65,12 @@ class Step1Panel(ttk.Frame):
 
         row4 = ttk.Frame(self.config_frame)
         row4.pack(fill=tk.X, pady=2)
-        self.storage_entry = LabeledEntry(row4, tr("step1.storage_backend"), "/data/kvcache", label_width=22)
+        self.storage_entry = LabeledEntry(row4, tr("step1.storage_backend"), "/data/kvcache", width=45, label_width=22)
         self.storage_entry.pack(side=tk.LEFT, padx=(0, 5))
 
         row5 = ttk.Frame(self.config_frame)
         row5.pack(fill=tk.X, pady=2)
-        self.output_dir_entry = LabeledEntry(row5, tr("step1.output_dir"), "./results/step1", label_width=22)
+        self.output_dir_entry = LabeledEntry(row5, tr("step1.output_dir"), "./results/step1", width=45, label_width=22)
         self.output_dir_entry.pack(side=tk.LEFT, padx=(0, 5))
         self.browse_output_btn = ttk.Button(row5, text=tr("step1.browse"), width=8,
                                              command=self._browse_output)
@@ -102,7 +103,13 @@ class Step1Panel(ttk.Frame):
                   font=("Consolas", 10, "bold"), foreground="blue").pack(anchor=tk.W)
 
     def _browse_model(self):
-        path = filedialog.askdirectory(title=tr("step1.browse_model_title"))
+        if not self.app.ssh or not self.app.ssh.connected:
+            messagebox.showwarning(tr("title.warning"), tr("msg.no_ssh"))
+            return
+        from gui.widgets import RemoteDirBrowser
+        browser = RemoteDirBrowser(self, self.app.ssh,
+                                    title=tr("step1.browse_model_title"))
+        path = browser.show()
         if path:
             self.model_dir_entry.set(path)
             self._on_model_change()
@@ -134,12 +141,23 @@ class Step1Panel(ttk.Frame):
         ctrl = UcmBandwidthController(self.app.ssh)
         images = ctrl.get_docker_images()
         if images:
-            self.docker_combo["values"] = images
-            self.docker_var.set(images[0])
-            self._log(f"[docker] found {len(images)} image(s): {', '.join(images)}")
+            self._all_images = sorted(images)
+            self.docker_combo["values"] = self._all_images
+            self.docker_var.set(self._all_images[0] if self._all_images else "")
+            self._log(f"[docker] found {len(images)} image(s)")
         else:
             messagebox.showinfo(tr("title.info"),
                                 "No vllm images found. Try a different filter.")
+
+    def _filter_images(self, event):
+        text = self.docker_var.get()
+        if not self._all_images:
+            return
+        if not text:
+            self.docker_combo["values"] = self._all_images
+            return
+        filtered = [img for img in self._all_images if text.lower() in img.lower()]
+        self.docker_combo["values"] = filtered
 
     def _on_model_change(self):
         model_path = self.model_dir_entry.get()

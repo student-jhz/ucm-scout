@@ -32,6 +32,9 @@ class MockSSHClient:
         if "echo ok" in command and "uname" in command:
             return 0, "Linux demo-host 5.15.0-generic x86_64 GNU/Linux\n", ""
 
+        if "ls -1p" in command:
+            return 0, "bin/\ndev/\netc/\nhome/\nmodels/\nroot/\ntmp/\nusr/\nvar/\n", ""
+
         if "docker images" in command:
             return 0, "nvidia/cuda:12.1-vllm\nvllm/vllm-openai:latest\nvllm-ascend:0.6.0\n", ""
 

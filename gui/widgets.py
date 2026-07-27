@@ -155,3 +155,113 @@ class ScenarioParamsPanel(ttk.LabelFrame):
             return int(self.concurrency_entry.get())
         except ValueError:
             return 1
+
+
+class RemoteDirBrowser(tk.Toplevel):
+    def __init__(self, parent, ssh_client, title="Remote Directory", **kwargs):
+        super().__init__(parent, **kwargs)
+        self.ssh = ssh_client
+        self.title(title)
+        self.geometry("600x450")
+        self.resizable(True, True)
+        self.transient(parent)
+        self.grab_set()
+        self.result = None
+        self._current_path = "/"
+        self._build()
+
+    def _build(self):
+        nav_frame = ttk.Frame(self)
+        nav_frame.pack(fill=tk.X, padx=10, pady=(10, 5))
+
+        ttk.Button(nav_frame, text="Up", width=4, command=self._go_up).pack(side=tk.LEFT, padx=(0, 5))
+        self.path_var = tk.StringVar(value="/")
+        self.path_entry = ttk.Entry(nav_frame, textvariable=self.path_var, width=60)
+        self.path_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 5))
+        self.path_entry.bind("<Return>", lambda e: self._navigate(self.path_var.get()))
+        ttk.Button(nav_frame, text="Go", width=4, command=lambda: self._navigate(self.path_var.get())).pack(side=tk.LEFT)
+
+        list_frame = ttk.Frame(self)
+        list_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+
+        scrollbar = ttk.Scrollbar(list_frame, orient=tk.VERTICAL)
+        self.dir_listbox = tk.Listbox(list_frame, yscrollcommand=scrollbar.set, font=("Consolas", 10),
+                                       selectmode=tk.SINGLE, activestyle="none")
+        scrollbar.configure(command=self.dir_listbox.yview)
+        self.dir_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        self.dir_listbox.bind("<Double-Button-1>", self._on_double_click)
+        self.dir_listbox.bind("<Return>", self._on_double_click)
+
+        btn_frame = ttk.Frame(self)
+        btn_frame.pack(fill=tk.X, padx=10, pady=(5, 10))
+        self.status_label = ttk.Label(btn_frame, text="", foreground="gray")
+        self.status_label.pack(side=tk.LEFT)
+        ttk.Button(btn_frame, text="Select", command=self._on_select).pack(side=tk.RIGHT, padx=5)
+        ttk.Button(btn_frame, text="Cancel", command=self.destroy).pack(side=tk.RIGHT)
+
+        self._navigate("/")
+
+    def _go_up(self):
+        parent = self._current_path.rstrip("/")
+        if parent:
+            parent = "/".join(parent.split("/")[:-1]) or "/"
+        else:
+            parent = "/"
+        self._navigate(parent)
+
+    def _on_double_click(self, event):
+        sel = self.dir_listbox.curselection()
+        if sel:
+            entry = self.dir_listbox.get(sel[0])
+            name = entry[2:].strip()
+            if entry.startswith("D "):
+                new_path = self._current_path.rstrip("/") + "/" + name
+                new_path = new_path.replace("//", "/")
+                self._navigate(new_path)
+
+    def _on_select(self):
+        self.result = self._current_path
+        self.destroy()
+
+    def _navigate(self, path):
+        path = path.rstrip("/") or "/"
+
+        def _fetch():
+            code, out, _ = self.ssh.execute(
+                f"ls -1p '{path}' 2>/dev/null | head -200", timeout=10)
+            if code != 0:
+                self._current_path = path
+                self.after(0, lambda: self._update_list([]))
+                self.after(0, lambda: self.status_label.configure(
+                    text=f"Error reading {path}"))
+                return
+            entries = []
+            for line in out.strip().split("\n"):
+                line = line.strip()
+                if not line:
+                    continue
+                if line.endswith("/"):
+                    entries.append(("D", line[:-1]))
+                else:
+                    entries.append(("F", line))
+            self._current_path = path
+            self.after(0, lambda: self._update_list(entries))
+            self.after(0, lambda: self.status_label.configure(text=f"{path}"))
+
+        self.status_label.configure(text="Loading...")
+        self.dir_listbox.delete(0, tk.END)
+        self.dir_listbox.insert(tk.END, "  Loading...")
+        import threading
+        threading.Thread(target=_fetch, daemon=True).start()
+
+    def _update_list(self, entries):
+        self.dir_listbox.delete(0, tk.END)
+        self.path_var.set(self._current_path)
+        for typ, name in entries:
+            prefix = "D " if typ == "D" else "  "
+            self.dir_listbox.insert(tk.END, f"{prefix}{name}")
+
+    def show(self):
+        self.wait_window()
+        return self.result
