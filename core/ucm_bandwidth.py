@@ -71,7 +71,7 @@ class UcmBandwidthController:
         return shard_size, shard_number
 
     def run(self, model_path, docker_image, ucm_pkg_local, dep_whl_local,
-            storage_backend, request_len, output_dir):
+            storage_backend, request_len, tp, output_dir):
         self.log(f"{'='*50}")
         self.log(f"[{datetime.now():%Y-%m-%d %H:%M:%S}] UCM bandwidth test started")
         self.log(f"  model_path: {model_path}")
@@ -79,7 +79,7 @@ class UcmBandwidthController:
         self.log(f"  storage_backend: {storage_backend}")
         self.log(f"  ucm_pkg: {os.path.basename(ucm_pkg_local)}")
         self.log(f"  dep_whl: {os.path.basename(dep_whl_local)}")
-        self.log(f"  request_len: {request_len}")
+        self.log(f"  request_len: {request_len}, tp: {tp}")
 
         if not self.ssh or not self.ssh.connected:
             self.log("[init] FAIL: SSH not connected")
@@ -137,7 +137,7 @@ class UcmBandwidthController:
 
         self.progress(50, "running UCM benchmark...")
         bw_result = self._run_benchmark(container_id, shard_size, shard_number,
-                                        block_number, actual_storage)
+                                        block_number, actual_storage, tp)
         if not bw_result:
             self._stop_container(container_id)
             self._cleanup_storage(temp_dir)
@@ -334,10 +334,11 @@ class UcmBandwidthController:
             return False
 
     def _run_benchmark(self, container_id, shard_size, shard_number,
-                       block_number, storage_backend):
+                       block_number, storage_backend, tp):
         remote_pkg = self.REMOTE_PKG_DIR
         bench_cmd = (
             f"docker exec {container_id} python3 {remote_pkg}/ucm_bench.py "
+            f"--worker-number {tp} "
             f"--shard-size {shard_size} "
             f"--shard-number {shard_number} "
             f"--block-number {block_number} "

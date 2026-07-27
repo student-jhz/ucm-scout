@@ -1,6 +1,7 @@
 import argparse
 import json
 import mmap
+import multiprocessing
 import secrets
 import time
 import os
@@ -12,12 +13,13 @@ from ucm.store.factory_v1 import UcmConnectorFactoryV1
 
 def parse_args():
     p = argparse.ArgumentParser(description="UCM Store Bandwidth Benchmark")
+    p.add_argument("--worker-number", type=int, default=1)
     p.add_argument("--shard-size", type=int, required=True)
     p.add_argument("--shard-number", type=int, required=True)
-    p.add_argument("--block-number", type=int, required=True)
+    p.add_argument("--block-number", type=int, default=64)
     p.add_argument("--storage-backend", type=str, required=True)
-    p.add_argument("--dump-epochs", type=int, default=8)
-    p.add_argument("--load-epochs", type=int, default=8)
+    p.add_argument("--dump-epochs", type=int, default=32)
+    p.add_argument("--load-epochs", type=int, default=32)
     p.add_argument("--output", type=str, default="/tmp/ucm_bench_result.json")
     return p.parse_args()
 
@@ -33,7 +35,7 @@ def make_array(size, alignment=262144, dtype=np.uint8):
     return raw_array[offset:offset + total_bytes].view(dtype=dtype)
 
 
-def create_store(shard_size, shard_number, storage_backend):
+def create_store(shard_size, shard_number, storage_backend, device_id=-1):
     config = {
         "store_pipeline": "Posix",
         "posix_io_engine": "aio",
@@ -41,79 +43,149 @@ def create_store(shard_size, shard_number, storage_backend):
         "tensor_size": shard_size,
         "shard_size": shard_size,
         "block_size": shard_size * shard_number,
-        "device_id": -1,
+        "device_id": device_id,
     }
     return UcmConnectorFactoryV1.create_connector(
         "UcmPipelineStore", config, "ucm.store.pipeline.connector"
     )
 
 
-def run_epochs(store, block_ids, block_ptr, shard_size, shard_number,
-               block_number, epochs, mode):
+def run_dump(epoch, device_id, store, block_ids, block_ptr, shard_size, shard_number, block_number):
     total_size = shard_size * shard_number * block_number
     costs = []
+    for i in range(shard_number):
+        idxes = [i for _ in range(block_number)]
+        ptrs = [[ptr + i * shard_size] for ptr in block_ptr]
+        tp = time.perf_counter()
+        task = store.dump_data(block_ids, idxes, ptrs)
+        store.wait(task)
+        costs.append(time.perf_counter() - tp)
+    total_cost = np.sum(costs)
+    print(
+        f"epoch={epoch:03}, worker={device_id:02}, "
+        f"dump=[{shard_size} x {block_number} x {shard_number}], "
+        f"avg_cost={np.average(costs) * 1e3:.3f}ms, "
+        f"p99_cost={np.percentile(costs, 99) * 1e3:.3f}ms, "
+        f"total_cost={total_cost * 1e3:.3f}ms, "
+        f"bw={total_size / total_cost / 1e9:.3f}GB/s."
+    )
+    return {
+        "epoch": epoch,
+        "worker": device_id,
+        "avg_cost_ms": np.average(costs) * 1e3,
+        "p99_cost_ms": np.percentile(costs, 99) * 1e3,
+        "total_cost_ms": total_cost * 1e3,
+        "bw_gbs": total_size / total_cost / 1e9,
+    }
 
-    for epoch in range(epochs):
-        epoch_costs = []
-        for i in range(shard_number):
-            idxes = [i for _ in range(block_number)]
-            ptrs = [[ptr + i * shard_size] for ptr in block_ptr]
-            tp = time.perf_counter()
-            if mode == "dump":
-                task = store.dump_data(block_ids, idxes, ptrs)
-            else:
-                task = store.load_data(block_ids, idxes, ptrs)
-            store.wait(task)
-            epoch_costs.append(time.perf_counter() - tp)
-        total_cost = sum(epoch_costs)
-        bw = total_size / max(total_cost, 1e-9) / 1e9
-        costs.append({
-            "epoch": epoch,
-            "avg_cost_ms": np.average(epoch_costs) * 1e3,
-            "total_cost_ms": total_cost * 1e3,
-            "bw_gbs": bw,
-        })
-        print(f"[{mode}] epoch={epoch:03} shards={shard_number} blocks={block_number} "
-              f"total={total_size}B bw={bw:.3f}GB/s")
 
-    return costs
+def run_load(epoch, device_id, store, block_ids, block_ptr, shard_size, shard_number, block_number):
+    total_size = shard_size * shard_number * block_number
+    costs = []
+    for i in range(shard_number):
+        idxes = [i for _ in range(block_number)]
+        ptrs = [[ptr + i * shard_size] for ptr in block_ptr]
+        tp = time.perf_counter()
+        task = store.load_data(block_ids, idxes, ptrs)
+        store.wait(task)
+        costs.append(time.perf_counter() - tp)
+    total_cost = np.sum(costs)
+    print(
+        f"epoch={epoch:03}, worker={device_id:02}, "
+        f"load=[{shard_size} x {block_number} x {shard_number}], "
+        f"avg_cost={np.average(costs) * 1e3:.3f}ms, "
+        f"p99_cost={np.percentile(costs, 99) * 1e3:.3f}ms, "
+        f"total_cost={total_cost * 1e3:.3f}ms, "
+        f"bw={total_size / total_cost / 1e9:.3f}GB/s."
+    )
+    return {
+        "epoch": epoch,
+        "worker": device_id,
+        "avg_cost_ms": np.average(costs) * 1e3,
+        "p99_cost_ms": np.percentile(costs, 99) * 1e3,
+        "total_cost_ms": total_cost * 1e3,
+        "bw_gbs": total_size / total_cost / 1e9,
+    }
+
+
+def worker_loop(device_id, barrier, result_queue, shard_size, shard_number,
+                block_number, storage_backend, dump_epochs, load_epochs):
+    store = create_store(shard_size, shard_number, storage_backend, device_id)
+    block_ids = [secrets.token_bytes(16) for _ in range(block_number)]
+    block_data = [make_array(shard_size * shard_number) for _ in range(block_number)]
+    block_ptr = [block.ctypes.data for block in block_data]
+
+    worker_results = {"dump": [], "load": []}
+
+    barrier.wait()
+    for epoch in range(dump_epochs):
+        r = run_dump(epoch, device_id, store, block_ids, block_ptr,
+                     shard_size, shard_number, block_number)
+        worker_results["dump"].append(r)
+        barrier.wait()
+
+    for epoch in range(load_epochs):
+        r = run_load(epoch, device_id, store, block_ids, block_ptr,
+                     shard_size, shard_number, block_number)
+        worker_results["load"].append(r)
+        barrier.wait()
+
+    result_queue.put(worker_results)
 
 
 def main():
     args = parse_args()
 
     os.makedirs(os.path.dirname(args.storage_backend) or ".", exist_ok=True)
-    store = create_store(args.shard_size, args.shard_number, args.storage_backend)
 
-    block_ids = [secrets.token_bytes(16) for _ in range(args.block_number)]
-    block_data = [make_array(args.shard_size * args.shard_number)
-                  for _ in range(args.block_number)]
-    block_ptr = [block.ctypes.data for block in block_data]
+    barrier = multiprocessing.Barrier(args.worker_number)
+    result_queue = multiprocessing.Queue()
+    workers = []
 
-    dump_costs = run_epochs(store, block_ids, block_ptr,
-                            args.shard_size, args.shard_number, args.block_number,
-                            args.dump_epochs, "dump")
+    try:
+        multiprocessing.set_start_method("spawn", force=True)
+    except RuntimeError:
+        pass
 
-    load_costs = run_epochs(store, block_ids, block_ptr,
-                            args.shard_size, args.shard_number, args.block_number,
-                            args.load_epochs, "load")
+    for i in range(args.worker_number):
+        p = multiprocessing.Process(
+            target=worker_loop,
+            args=(i, barrier, result_queue, args.shard_size, args.shard_number,
+                  args.block_number, args.storage_backend,
+                  args.dump_epochs, args.load_epochs),
+        )
+        workers.append(p)
+        p.start()
 
-    dump_bw = [c["bw_gbs"] for c in dump_costs]
-    load_bw = [c["bw_gbs"] for c in load_costs]
+    for w in workers:
+        w.join()
+
+    all_dump = []
+    all_load = []
+    for _ in range(args.worker_number):
+        r = result_queue.get()
+        all_dump.extend(r["dump"])
+        all_load.extend(r["load"])
+
+    dump_bw = [c["bw_gbs"] for c in all_dump]
+    load_bw = [c["bw_gbs"] for c in all_load]
+
+    total_size = args.shard_size * args.shard_number * args.block_number
 
     result = {
+        "worker_number": args.worker_number,
         "shard_size": args.shard_size,
         "shard_number": args.shard_number,
         "block_number": args.block_number,
-        "total_size_bytes": args.shard_size * args.shard_number * args.block_number,
+        "total_size_bytes": total_size * args.worker_number,
         "dump_epochs": args.dump_epochs,
         "load_epochs": args.load_epochs,
         "dump_avg_bw_gbs": float(np.mean(dump_bw)),
         "dump_p99_bw_gbs": float(np.percentile(dump_bw, 99)),
         "load_avg_bw_gbs": float(np.mean(load_bw)),
         "load_p99_bw_gbs": float(np.percentile(load_bw, 99)),
-        "dump_costs": dump_costs,
-        "load_costs": load_costs,
+        "dump_costs": all_dump,
+        "load_costs": all_load,
     }
 
     with open(args.output, "w") as f:

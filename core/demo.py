@@ -80,17 +80,22 @@ class MockSSHClient:
             if on_stdout:
                 on_stdout("[demo] running UCM benchmark...")
             time.sleep(1.0)
+            tp = 1
+            m = re.search(r"--worker-number\s+(\d+)", command)
+            if m:
+                tp = int(m.group(1))
             result = {
+                "worker_number": tp,
                 "shard_size": 288,
                 "shard_number": 32,
                 "block_number": 8,
-                "total_size_bytes": 288 * 32 * 8,
-                "dump_epochs": 8,
-                "load_epochs": 8,
-                "dump_avg_bw_gbs": random.uniform(2.5, 4.0),
-                "dump_p99_bw_gbs": random.uniform(2.0, 3.5),
-                "load_avg_bw_gbs": random.uniform(3.0, 5.0),
-                "load_p99_bw_gbs": random.uniform(2.5, 4.5),
+                "total_size_bytes": 288 * 32 * 8 * tp,
+                "dump_epochs": 32,
+                "load_epochs": 32,
+                "dump_avg_bw_gbs": random.uniform(2.5, 4.0) * tp,
+                "dump_p99_bw_gbs": random.uniform(2.0, 3.5) * tp,
+                "load_avg_bw_gbs": random.uniform(3.0, 5.0) * tp,
+                "load_p99_bw_gbs": random.uniform(2.5, 4.5) * tp,
             }
             result_text = json.dumps(result, indent=2)
             if on_stdout:
