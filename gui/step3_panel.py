@@ -24,7 +24,7 @@ class Step3Panel(ttk.Frame):
 
         row1 = ttk.Frame(self.config_frame)
         row1.pack(fill=tk.X, pady=2)
-        self.bw_entry = LabeledEntry(row1, tr("step3.bw"), "", label_width=20)
+        self.bw_entry = LabeledEntry(row1, tr("step3.bw"), "", label_width=24)
         self.bw_entry.pack(side=tk.LEFT, padx=(0, 5))
         self.from_step1_btn = ttk.Button(row1, text=tr("step3.from_step1"),
                                           command=self._auto_fill_step1, width=10)
@@ -40,12 +40,12 @@ class Step3Panel(ttk.Frame):
 
         row3 = ttk.Frame(self.config_frame)
         row3.pack(fill=tk.X, pady=2)
-        self.hbm_ttft_entry = LabeledEntry(row3, tr("step3.hbm_ttft"), "", label_width=20)
+        self.hbm_ttft_entry = LabeledEntry(row3, tr("step3.hbm_ttft"), "", label_width=24)
         self.hbm_ttft_entry.pack(side=tk.LEFT, padx=(0, 5))
 
         row4 = ttk.Frame(self.config_frame)
         row4.pack(fill=tk.X, pady=2)
-        self.pcie_entry = LabeledEntry(row4, tr("step3.pcie_bw"), "50.0", label_width=20)
+        self.pcie_entry = LabeledEntry(row4, tr("step3.pcie_bw"), "50.0", label_width=24)
         self.pcie_entry.pack(side=tk.LEFT, padx=(0, 5))
 
         row5 = ttk.Frame(self.config_frame)
@@ -56,7 +56,7 @@ class Step3Panel(ttk.Frame):
 
         row6 = ttk.Frame(self.config_frame)
         row6.pack(fill=tk.X, pady=2)
-        self.output_dir_entry = LabeledEntry(row6, tr("step3.output_dir"), "./results/step3")
+        self.output_dir_entry = LabeledEntry(row6, tr("step3.output_dir"), "./results/step3", label_width=24)
         self.output_dir_entry.pack(side=tk.LEFT, padx=(0, 5))
 
         btn_frame = ttk.Frame(self)
