@@ -4,68 +4,118 @@ from datetime import datetime
 
 
 class Analyzer:
+    DEFAULT_PCIE_BW_GBS = 50.0
+
     def __init__(self, log_callback=None):
         self.log = log_callback or (lambda msg: None)
         self.results = {}
 
     def analyze(
         self,
-        bandwidth_gbs,
+        load_bw_gbs,
         full_prefill_ttft_ms,
         hbm_pc_ttft_ms,
-        model_size_gb=None,
-        kt_cache_hit_ratio=None,
+        shard_size,
+        shard_number,
+        block_number,
+        pcie_bw_gbs=None,
         output_dir=None,
     ):
+        if pcie_bw_gbs is None or pcie_bw_gbs <= 0:
+            pcie_bw_gbs = self.DEFAULT_PCIE_BW_GBS
+
         self.log(f"[{datetime.now():%Y-%m-%d %H:%M:%S}] analysis started")
-        self.log(f"  bandwidth: {bandwidth_gbs} GB/s")
-        self.log(f"  full_prefill_ttft: {full_prefill_ttft_ms} ms")
-        self.log(f"  hbm_pc_ttft: {hbm_pc_ttft_ms} ms")
+        self.log(f"  load_bw: {load_bw_gbs:.3f} GB/s (SSD->DRAM)")
+        self.log(f"  pcie_bw: {pcie_bw_gbs:.1f} GB/s (DRAM->HBM)")
+        self.log(f"  full_prefill: {full_prefill_ttft_ms:.2f} ms")
+        self.log(f"  hbm_pc_hit: {hbm_pc_ttft_ms:.2f} ms")
+        self.log(f"  shard_size: {shard_size} B, shard_number: {shard_number}, "
+                 f"block_number: {block_number}")
 
-        bw_valid = bandwidth_gbs and bandwidth_gbs > 0
-        full_ttft_valid = full_prefill_ttft_ms and full_prefill_ttft_ms > 0
-        hbm_ttft_valid = hbm_pc_ttft_ms is not None and hbm_pc_ttft_ms > 0
+        total_bytes = shard_size * shard_number * block_number
+        bytes_per_layer = shard_size * block_number
 
-        if not bw_valid:
-            self.log("WARNING: bandwidth data is zero/invalid, using reference estimate")
-            bandwidth_gbs = self._estimate_bandwidth_from_ttft(full_prefill_ttft_ms)
+        self.log(f"  total_kv_bytes: {total_bytes} B ({total_bytes / 1e6:.2f} MB)")
 
-        if not full_ttft_valid:
-            self.log("WARNING: full prefill TTFT is zero/invalid, cannot analyze accurately")
+        t_compute_total_ms = hbm_pc_ttft_ms
+        t_compute_per_layer_ms = (
+            hbm_pc_ttft_ms / shard_number if shard_number > 0 else hbm_pc_ttft_ms
+        )
 
-        if not hbm_ttft_valid:
-            self.log("WARNING: HBM PC TTFT not provided, estimating bound")
+        t_ssd_per_layer_ms = (bytes_per_layer / max(load_bw_gbs * 1e9, 1e-9)) * 1000
+        t_hbm_per_layer_ms = (bytes_per_layer / max(pcie_bw_gbs * 1e9, 1e-9)) * 1000
 
-        ucm_min_ttft = hbm_pc_ttft_ms if hbm_ttft_valid else full_prefill_ttft_ms * 0.1
-        ucm_max_ttft = full_prefill_ttft_ms if full_ttft_valid else hbm_pc_ttft_ms * 10
-        ucm_avg_ttft = (ucm_min_ttft + ucm_max_ttft) / 2
+        t_io_per_layer_ms = t_ssd_per_layer_ms + t_hbm_per_layer_ms
+        t_io_total_ms = t_io_per_layer_ms * shard_number
 
-        self.log("--- Analysis Result ---")
-        self.log(f"  UCM PC TTFT range: [{ucm_min_ttft:.2f}, {ucm_max_ttft:.2f}] ms")
-        self.log(f"  UCM PC TTFT (avg estimate): {ucm_avg_ttft:.2f} ms")
+        self.log("--- IO Breakdown ---")
+        self.log(f"  SSD->DRAM per layer: {t_ssd_per_layer_ms:.3f} ms "
+                 f"({bytes_per_layer / 1e6:.2f} MB @ {load_bw_gbs:.1f} GB/s)")
+        self.log(f"  DRAM->HBM per layer: {t_hbm_per_layer_ms:.3f} ms "
+                 f"(@ {pcie_bw_gbs:.1f} GB/s)")
+        self.log(f"  IO per layer total:  {t_io_per_layer_ms:.3f} ms")
+        self.log(f"  Compute per layer:   {t_compute_per_layer_ms:.3f} ms")
 
-        ttft_ratio = (full_prefill_ttft_ms / max(hbm_pc_ttft_ms, 0.001)) if full_ttft_valid and hbm_ttft_valid else 0
-        if ttft_ratio > 0:
-            self.log(f"  TTFT ratio (full/hbm_pc): {ttft_ratio:.2f}x")
-            self.log(f"  bandwidth_benefit: ~{ttft_ratio:.1f}x latency reduction with HBM PC")
+        if t_io_per_layer_ms <= t_compute_per_layer_ms:
+            ucm_ttft_ms = hbm_pc_ttft_ms + t_io_per_layer_ms
+            strategy = "pipelined (IO hidden by compute)"
+            self.log(f"  [pipeline] IO per layer <= compute per layer "
+                     f"({t_io_per_layer_ms:.3f} <= {t_compute_per_layer_ms:.3f})")
+            self.log(f"  [pipeline] IO hidden, UCM PC TTFT ≈ HBM PC + first layer load")
+        else:
+            ucm_ttft_ms = t_io_total_ms + t_compute_per_layer_ms
+            strategy = "pipelined (IO bottleneck)"
+            self.log(f"  [pipeline] IO per layer > compute per layer "
+                     f"({t_io_per_layer_ms:.3f} > {t_compute_per_layer_ms:.3f})")
+            self.log(f"  [pipeline] IO bottleneck, TTFT = all IO + last layer compute")
+
+        is_beneficial = ucm_ttft_ms < full_prefill_ttft_ms
+        ttft_ratio = full_prefill_ttft_ms / max(ucm_ttft_ms, 0.001) if is_beneficial else 0
+        slowdown = ucm_ttft_ms / max(full_prefill_ttft_ms, 0.001) if not is_beneficial else 0
+        ratio_vs_hbm = ucm_ttft_ms / max(hbm_pc_ttft_ms, 0.001)
+
+        self.log("--- Result ---")
+        self.log(f"  UCM PC TTFT: {ucm_ttft_ms:.2f} ms")
+        self.log(f"  Strategy: {strategy}")
+        self.log(f"  vs Full Prefill: {'+' if is_beneficial else '-'}"
+                 f"{abs(ucm_ttft_ms - full_prefill_ttft_ms):.2f} ms")
+        if is_beneficial:
+            self.log(f"  Speedup: {ttft_ratio:.2f}x over full prefill")
+        else:
+            self.log(f"  Slowdown: {slowdown:.2f}x slower than full prefill")
+            self.log(f"  WARNING: UCM PC slower than recomputation at this bandwidth!")
+        self.log(f"  vs HBM PC: {ratio_vs_hbm:.2f}x slowdown")
+
+        ucm_ttft_lo = hbm_pc_ttft_ms + t_io_per_layer_ms
+        ucm_ttft_hi = t_io_total_ms + t_compute_per_layer_ms
 
         self.results = {
             "timestamp": datetime.now().isoformat(),
-            "bandwidth_gbs": bandwidth_gbs,
+            "load_bw_gbs": load_bw_gbs,
+            "pcie_bw_gbs": pcie_bw_gbs,
             "full_prefill_ttft_ms": full_prefill_ttft_ms,
             "hbm_pc_ttft_ms": hbm_pc_ttft_ms,
-            "ucm_pc_ttft_range_ms": [ucm_min_ttft, ucm_max_ttft],
-            "ucm_pc_ttft_avg_ms": ucm_avg_ttft,
-            "ttft_ratio": ttft_ratio,
+            "shard_size": shard_size,
+            "shard_number": shard_number,
+            "block_number": block_number,
+            "total_kv_bytes": total_bytes,
+            "t_ssd_per_layer_ms": t_ssd_per_layer_ms,
+            "t_hbm_per_layer_ms": t_hbm_per_layer_ms,
+            "t_io_per_layer_ms": t_io_per_layer_ms,
+            "t_compute_per_layer_ms": t_compute_per_layer_ms,
+            "strategy": strategy,
+            "ucm_pc_ttft_ms": ucm_ttft_ms,
+            "ucm_pc_ttft_range_ms": [ucm_ttft_lo, ucm_ttft_hi],
+            "is_beneficial": is_beneficial,
+            "speedup_vs_full": ttft_ratio,
+            "slowdown_vs_full": slowdown,
+            "ratio_vs_hbm_pc": ratio_vs_hbm,
         }
 
         if output_dir:
             self.save_results(output_dir)
 
         return self.results
-
-    def _estimate_bandwidth_from_ttft(self, ttft_ms):
-        return ttft_ms * 0.05 / 1000 if ttft_ms > 0 else 0
 
     def save_results(self, output_dir):
         os.makedirs(output_dir, exist_ok=True)

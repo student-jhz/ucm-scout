@@ -337,3 +337,12 @@ class Step1Panel(ttk.Frame):
         if m:
             return float(m.group(1))
         return None
+
+    def get_shard_size(self):
+        return self._shard_size
+
+    def get_shard_number(self):
+        return self._shard_number
+
+    def get_block_number(self):
+        return max(1, self.app.scenario_params.get_request_len() // BLOCK_SIZE)
