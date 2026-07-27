@@ -53,6 +53,12 @@ class MockSSHClient:
         if "mkdir" in command and "ucm_pkgs" in command:
             return 0, "", ""
 
+        if "tar -xzf" in command and "ucm_pkgs" in command:
+            return 0, "", ""
+
+        if "find" in command and "*.whl" in command:
+            return 0, "/tmp/ucm_pkgs/_extracted/ucm_manager-0.1.0-py3-none-any.whl\n", ""
+
         if "docker run" in command and "sleep infinity" in command:
             return 0, "demo-container-001\n", ""
 

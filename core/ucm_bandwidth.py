@@ -10,6 +10,7 @@ class UcmBandwidthController:
     BLOCK_SIZE = 128
     ELEM_SIZE = 2
     REMOTE_PKG_DIR = "/tmp/ucm_pkgs"
+    EXTRACT_DIR = "/tmp/ucm_pkgs/_extracted"
 
     def __init__(self, ssh_client, log_callback=None, progress_callback=None):
         self.ssh = ssh_client
@@ -28,15 +29,17 @@ class UcmBandwidthController:
 
     def parse_model_config(self, model_path):
         config_path = os.path.join(model_path, "config.json").replace("\\", "/")
+        self.log(f"[config] reading {config_path} ...")
         code, out, err = self.ssh.execute(f"cat {config_path}", timeout=15)
         if code != 0 or not out.strip():
-            self.log(f"ERROR: cannot read config.json from {config_path}: {err}")
+            self.log(f"[config] FAIL: cannot read config.json")
+            self.log(f"[config]   reason: {err.strip() if err else 'file not found or empty'}")
             return None
 
         try:
             config = json.loads(out)
-        except json.JSONDecodeError:
-            self.log("ERROR: invalid config.json")
+        except json.JSONDecodeError as e:
+            self.log(f"[config] FAIL: invalid JSON - {e}")
             return None
 
         num_layers = config.get("num_hidden_layers", 0)
@@ -55,53 +58,70 @@ class UcmBandwidthController:
             head_dim = num_kv_heads * head_dim * 2
 
         if not num_layers or not head_dim:
-            self.log(f"ERROR: missing config fields - layers={num_layers}, head_dim={head_dim}")
+            self.log(f"[config] FAIL: missing fields - num_hidden_layers={num_layers}, "
+                     f"computed_head_dim={head_dim}")
             return None
 
         shard_size = head_dim * self.BLOCK_SIZE * self.ELEM_SIZE
         shard_number = num_layers
 
-        self.log(f"model: {model_type}, layers={num_layers}, "
+        self.log(f"[config] OK: type={model_type}, layers={num_layers}, "
                  f"shard_size={shard_size}B ({shard_size / 1024:.1f}KB), "
                  f"shard_number={shard_number}")
         return shard_size, shard_number
 
     def run(self, model_path, docker_image, ucm_pkg_local, dep_whl_local,
             storage_backend, request_len, output_dir):
-        self.progress(0, "starting UCM bandwidth test...")
+        self.log(f"{'='*50}")
         self.log(f"[{datetime.now():%Y-%m-%d %H:%M:%S}] UCM bandwidth test started")
         self.log(f"  model_path: {model_path}")
         self.log(f"  docker_image: {docker_image}")
         self.log(f"  storage_backend: {storage_backend}")
+        self.log(f"  ucm_pkg: {os.path.basename(ucm_pkg_local)}")
+        self.log(f"  dep_whl: {os.path.basename(dep_whl_local)}")
         self.log(f"  request_len: {request_len}")
 
         if not self.ssh or not self.ssh.connected:
-            self.log("ERROR: SSH not connected")
+            self.log("[init] FAIL: SSH not connected")
             return None
+
+        self.log("[init] OK: SSH connected")
 
         cfg = self.parse_model_config(model_path)
         if not cfg:
             return None
         shard_size, shard_number = cfg
         block_number = max(1, request_len // self.BLOCK_SIZE)
-        self.log(f"  shard_size={shard_size}B, shard_number={shard_number}, "
+        self.log(f"[calc] shard_size={shard_size}B, shard_number={shard_number}, "
                  f"block_number={block_number} (req_len/{self.BLOCK_SIZE})")
 
         self.progress(5, "uploading packages...")
-        self._upload_packages(ucm_pkg_local, dep_whl_local)
+        if not self._upload_packages(ucm_pkg_local, dep_whl_local):
+            return None
 
-        self.progress(10, "creating container...")
+        self.progress(10, "extracting UCM package...")
+        if not self._extract_ucm(ucm_pkg_local):
+            return None
+
+        self.progress(15, "creating container...")
         container_id = self._create_container(docker_image, model_path, storage_backend)
         if not container_id:
             return None
 
-        self.progress(20, "installing UCM in container...")
-        if not self._install_ucm(container_id, dep_whl_local, ucm_pkg_local):
+        self.progress(25, "installing wrapt dependency...")
+        if not self._install_wrapt(container_id, dep_whl_local):
             self._stop_container(container_id)
             return None
 
-        self.progress(40, "uploading benchmark script...")
-        self._upload_bench_script()
+        self.progress(35, "installing UCM in container...")
+        if not self._install_ucm_whl(container_id):
+            self._stop_container(container_id)
+            return None
+
+        self.progress(45, "uploading benchmark script...")
+        if not self._upload_bench_script():
+            self._stop_container(container_id)
+            return None
 
         self.progress(50, "running UCM benchmark...")
         bw_result = self._run_benchmark(container_id, shard_size, shard_number,
@@ -117,18 +137,60 @@ class UcmBandwidthController:
         self._collect_results(bw_result, shard_size, shard_number, block_number, output_dir)
 
         self.progress(100, "UCM bandwidth test complete")
-        self.log(f"[{datetime.now():%Y-%m-%d %H:%M:%S}] bandwidth test finished")
+        self.log(f"[{datetime.now():%Y-%m-%d %H:%M:%S}] ====== ALL DONE ======")
         return self.results
 
     def _upload_packages(self, ucm_pkg_local, dep_whl_local):
-        self.log("uploading packages to remote...")
         pkg_name = os.path.basename(ucm_pkg_local)
         dep_name = os.path.basename(dep_whl_local)
+
+        self.log(f"[upload] creating {self.REMOTE_PKG_DIR} ...")
         self.ssh.execute(f"mkdir -p {self.REMOTE_PKG_DIR}", timeout=10)
-        self.ssh.upload_file(ucm_pkg_local, f"{self.REMOTE_PKG_DIR}/{pkg_name}")
-        self.log(f"  uploaded {pkg_name}")
-        self.ssh.upload_file(dep_whl_local, f"{self.REMOTE_PKG_DIR}/{dep_name}")
-        self.log(f"  uploaded {dep_name}")
+
+        try:
+            self.ssh.upload_file(ucm_pkg_local, f"{self.REMOTE_PKG_DIR}/{pkg_name}")
+            self.log(f"[upload] OK: {pkg_name}")
+        except Exception as e:
+            self.log(f"[upload] FAIL: {pkg_name} - {e}")
+            return False
+
+        try:
+            self.ssh.upload_file(dep_whl_local, f"{self.REMOTE_PKG_DIR}/{dep_name}")
+            self.log(f"[upload] OK: {dep_name}")
+        except Exception as e:
+            self.log(f"[upload] FAIL: {dep_name} - {e}")
+            return False
+
+        return True
+
+    def _extract_ucm(self, ucm_pkg_local):
+        pkg_name = os.path.basename(ucm_pkg_local)
+        rp = self.REMOTE_PKG_DIR
+
+        self.log(f"[extract] extracting {pkg_name} ...")
+        code, out, err = self.ssh.execute(
+            f"mkdir -p {self.EXTRACT_DIR} && "
+            f"tar -xzf {rp}/{pkg_name} -C {self.EXTRACT_DIR}",
+            timeout=30,
+        )
+        if code != 0:
+            self.log(f"[extract] FAIL: tar extract failed")
+            self.log(f"[extract]   reason: {err.strip() if err else 'unknown'}")
+            return False
+
+        code, out, err = self.ssh.execute(
+            f"find {self.EXTRACT_DIR} -name '*.whl' -type f", timeout=10,
+        )
+        if code != 0 or not out.strip():
+            self.log(f"[extract] FAIL: no .whl found inside {pkg_name}")
+            return False
+
+        whl_files = [line.strip() for line in out.strip().split("\n") if line.strip()]
+        self.log(f"[extract] OK: found {len(whl_files)} whl(s)")
+        for w in whl_files:
+            self.log(f"[extract]   {w}")
+        self._extracted_whls = whl_files
+        return True
 
     def _create_container(self, docker_image, model_path, storage_backend):
         timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
@@ -146,43 +208,85 @@ class UcmBandwidthController:
             f"--name {container_name} "
             f"{docker_image} sleep infinity"
         )
-        self.log(f"creating container: {cmd}")
+        self.log(f"[container] creating: {cmd}")
         code, out, err = self.ssh.execute(cmd, timeout=30)
         container_id = out.strip()
         if code != 0:
-            self.log(f"ERROR: failed to create container: {err}")
+            self.log(f"[container] FAIL: docker run failed")
+            self.log(f"[container]   reason: {err.strip() if err else 'unknown'}")
             return None
-        self.log(f"container created: {container_id}")
+        self.log(f"[container] OK: {container_id}")
         self.results["container_id"] = container_id
         return container_id
 
-    def _install_ucm(self, container_id, dep_whl_local, ucm_pkg_local):
+    def _install_wrapt(self, container_id, dep_whl_local):
         dep_name = os.path.basename(dep_whl_local)
-        pkg_name = os.path.basename(ucm_pkg_local)
-        remote_pkg = self.REMOTE_PKG_DIR
+        rp = self.REMOTE_PKG_DIR
+        cmd = f"docker exec {container_id} pip install {rp}/{dep_name}"
 
-        self.log("installing dependencies...")
-        cmds = [
-            f"docker exec {container_id} pip install {remote_pkg}/{dep_name}",
-            f"docker exec {container_id} pip install {remote_pkg}/{pkg_name}",
-        ]
+        self.log(f"[install] step 1/2: wrapt dependency")
+        self.log(f"[install]   $ {cmd}")
+        code, out, err = self.ssh.execute(cmd, timeout=120)
 
-        for cmd in cmds:
-            self.log(f"  $ {cmd}")
-            code, out, err = self.ssh.execute(cmd, timeout=120)
-            if out.strip():
-                for line in out.strip().split("\n"):
-                    self.log(f"    {line}")
-            if code != 0:
-                self.log(f"ERROR: install failed: {err}")
-                return False
-        self.log("UCM installed successfully")
+        for line in out.strip().split("\n"):
+            if line.strip():
+                self.log(f"[install]   {line.strip()}")
+        if err.strip():
+            for line in err.strip().split("\n"):
+                if line.strip():
+                    self.log(f"[install]   [stderr] {line.strip()}")
+
+        if code != 0:
+            self.log(f"[install] FAIL: wrapt installation failed (exit={code})")
+            return False
+        self.log(f"[install] OK: wrapt installed")
         return True
+
+    def _install_ucm_whl(self, container_id):
+        rp = self.REMOTE_PKG_DIR
+
+        if not getattr(self, "_extracted_whls", None):
+            self.log(f"[install] FAIL: no extracted whl files found")
+            return False
+
+        ucm_whls = [w for w in self._extracted_whls
+                     if "wrapt" not in os.path.basename(w).lower()]
+        if not ucm_whls:
+            self.log(f"[install] FAIL: no UCM whl found (all whls are wrapt)")
+            return False
+
+        self.log(f"[install] step 2/2: UCM package")
+        ok_all = True
+        for whl in ucm_whls:
+            cmd = f"docker exec {container_id} pip install {whl}"
+            self.log(f"[install]   $ {cmd}")
+            code, out, err = self.ssh.execute(cmd, timeout=120)
+
+            for line in out.strip().split("\n"):
+                if line.strip():
+                    self.log(f"[install]   {line.strip()}")
+            if err.strip():
+                for line in err.strip().split("\n"):
+                    if line.strip():
+                        self.log(f"[install]   [stderr] {line.strip()}")
+
+            if code != 0:
+                self.log(f"[install] FAIL: {os.path.basename(whl)} install failed (exit={code})")
+                ok_all = False
+            else:
+                self.log(f"[install] OK: {os.path.basename(whl)} installed")
+
+        return ok_all
 
     def _upload_bench_script(self):
         local_script = os.path.join(REMOTE_SCRIPT_DIR, "ucm_bench.py")
-        self.ssh.upload_file(local_script, f"{self.REMOTE_PKG_DIR}/ucm_bench.py")
-        self.log("benchmark script uploaded")
+        try:
+            self.ssh.upload_file(local_script, f"{self.REMOTE_PKG_DIR}/ucm_bench.py")
+            self.log(f"[upload] OK: ucm_bench.py")
+            return True
+        except Exception as e:
+            self.log(f"[upload] FAIL: ucm_bench.py - {e}")
+            return False
 
     def _run_benchmark(self, container_id, shard_size, shard_number,
                        block_number, storage_backend):
@@ -195,30 +299,42 @@ class UcmBandwidthController:
             f"--storage-backend {storage_backend} "
             f"--output {remote_pkg}/ucm_bench_result.json"
         )
-        self.log(f"running benchmark: {bench_cmd}")
+        self.log(f"[bench] running: {bench_cmd}")
 
         def on_out(line):
-            self.log(f"  [bench] {line}")
+            self.log(f"[bench] {line}")
 
         code, out, err = self.ssh.execute(bench_cmd, on_stdout=on_out, timeout=600)
         if code != 0:
-            self.log(f"benchmark failed: exit={code}, err={err}")
+            self.log(f"[bench] FAIL: exit={code}")
+            if err.strip():
+                self.log(f"[bench]   reason: {err.strip()}")
             return None
 
         code, out, err = self.ssh.execute(
             f"cat {remote_pkg}/ucm_bench_result.json", timeout=10
         )
-        if code == 0 and out.strip():
-            try:
-                return json.loads(out)
-            except json.JSONDecodeError:
-                self.log("ERROR: invalid benchmark result JSON")
-        return None
+        if code != 0 or not out.strip():
+            self.log(f"[bench] FAIL: cannot read result file")
+            self.log(f"[bench]   reason: {err.strip() if err else 'empty file'}")
+            return None
+
+        try:
+            result = json.loads(out)
+            self.log(f"[bench] OK: dump_avg={result.get('dump_avg_bw_gbs', 0):.3f} GB/s, "
+                     f"load_avg={result.get('load_avg_bw_gbs', 0):.3f} GB/s")
+            return result
+        except json.JSONDecodeError as e:
+            self.log(f"[bench] FAIL: invalid result JSON - {e}")
+            return None
 
     def _stop_container(self, container_id):
-        self.log(f"stopping container {container_id}...")
-        self.ssh.execute(f"docker stop {container_id}", timeout=30)
-        self.log("container stopped")
+        self.log(f"[container] stopping {container_id} ...")
+        code, out, err = self.ssh.execute(f"docker stop {container_id}", timeout=30)
+        if code != 0:
+            self.log(f"[container] warn: stop returned {code}: {err.strip()}")
+        else:
+            self.log(f"[container] OK: stopped")
 
     def _collect_results(self, bw_result, shard_size, shard_number,
                          block_number, output_dir):
@@ -238,4 +354,4 @@ class UcmBandwidthController:
         result_path = os.path.join(output_dir, self.RESULT_FILE)
         with open(result_path, "w") as f:
             json.dump(self.results, f, indent=2, default=str)
-        self.log(f"results saved to {result_path}")
+        self.log(f"[result] OK: saved to {result_path}")
