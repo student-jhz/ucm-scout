@@ -203,6 +203,13 @@ class Step1Panel(ttk.Frame):
         if not self.storage_entry.get():
             messagebox.showwarning(tr("title.validation_error"), tr("msg.no_storage_backend"))
             return
+        storage_path = self.storage_entry.get()
+        ok = messagebox.askyesno(
+            tr("title.warning"),
+            tr("msg.storage_confirm", path=storage_path),
+        )
+        if not ok:
+            return
         self._running = True
         self._run_state = "running"
         self.run_btn.configure(state=tk.DISABLED)

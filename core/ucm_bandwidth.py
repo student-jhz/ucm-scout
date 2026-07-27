@@ -87,8 +87,14 @@ class UcmBandwidthController:
 
         self.log("[init] OK: SSH connected")
 
+        temp_dir = self._check_and_prepare_storage(storage_backend)
+        if not temp_dir:
+            return None
+        actual_storage = temp_dir
+
         cfg = self.parse_model_config(model_path)
         if not cfg:
+            self._cleanup_storage(temp_dir)
             return None
         shard_size, shard_number = cfg
         block_number = max(1, request_len // self.BLOCK_SIZE)
@@ -97,41 +103,51 @@ class UcmBandwidthController:
 
         self.progress(5, "uploading packages...")
         if not self._upload_packages(ucm_pkg_local, dep_whl_local):
+            self._cleanup_storage(temp_dir)
             return None
 
         self.progress(10, "extracting UCM package...")
         if not self._extract_ucm(ucm_pkg_local):
+            self._cleanup_storage(temp_dir)
             return None
 
         self.progress(15, "creating container...")
-        container_id = self._create_container(docker_image, model_path, storage_backend)
+        container_id = self._create_container(docker_image, model_path, actual_storage)
         if not container_id:
+            self._cleanup_storage(temp_dir)
             return None
 
         self.progress(25, "installing wrapt dependency...")
         if not self._install_wrapt(container_id, dep_whl_local):
             self._stop_container(container_id)
+            self._cleanup_storage(temp_dir)
             return None
 
         self.progress(35, "installing UCM in container...")
         if not self._install_ucm_whl(container_id):
             self._stop_container(container_id)
+            self._cleanup_storage(temp_dir)
             return None
 
         self.progress(45, "uploading benchmark script...")
         if not self._upload_bench_script():
             self._stop_container(container_id)
+            self._cleanup_storage(temp_dir)
             return None
 
         self.progress(50, "running UCM benchmark...")
         bw_result = self._run_benchmark(container_id, shard_size, shard_number,
-                                        block_number, storage_backend)
+                                        block_number, actual_storage)
         if not bw_result:
             self._stop_container(container_id)
+            self._cleanup_storage(temp_dir)
             return None
 
         self.progress(85, "stopping container...")
         self._stop_container(container_id)
+
+        self.progress(90, "cleaning up storage...")
+        self._cleanup_storage(temp_dir)
 
         self.progress(95, "collecting results...")
         self._collect_results(bw_result, shard_size, shard_number, block_number, output_dir)
@@ -139,6 +155,35 @@ class UcmBandwidthController:
         self.progress(100, "UCM bandwidth test complete")
         self.log(f"[{datetime.now():%Y-%m-%d %H:%M:%S}] ====== ALL DONE ======")
         return self.results
+
+    def _check_and_prepare_storage(self, storage_backend):
+        storage_backend = storage_backend.rstrip("/")
+        self.log(f"[storage] checking path: {storage_backend}")
+
+        code, out, err = self.ssh.execute(
+            f"test -d {storage_backend} && echo 'EXISTS' || echo 'NOT_EXISTS'", timeout=10
+        )
+        if "NOT_EXISTS" in out:
+            self.log(f"[storage] FAIL: path does not exist: {storage_backend}")
+            return None
+
+        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+        temp_dir = f"{storage_backend}/ucm_bench_{timestamp}"
+        self.log(f"[storage] OK: creating temp dir {temp_dir}")
+        code, out, err = self.ssh.execute(f"mkdir -p {temp_dir}", timeout=10)
+        if code != 0:
+            self.log(f"[storage] FAIL: cannot create {temp_dir}: {err}")
+            return None
+        self.log(f"[storage] OK: temp dir created, data will be cleaned up after test")
+        return temp_dir
+
+    def _cleanup_storage(self, temp_dir):
+        self.log(f"[storage] cleaning up {temp_dir} ...")
+        code, out, err = self.ssh.execute(f"rm -rf {temp_dir}", timeout=10)
+        if code != 0:
+            self.log(f"[storage] warn: cleanup failed: {err}")
+        else:
+            self.log(f"[storage] OK: removed")
 
     def _upload_packages(self, ucm_pkg_local, dep_whl_local):
         pkg_name = os.path.basename(ucm_pkg_local)

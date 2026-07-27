@@ -53,6 +53,15 @@ class MockSSHClient:
         if "mkdir" in command and "ucm_pkgs" in command:
             return 0, "", ""
 
+        if "test -d" in command and "EXISTS" in command:
+            return 0, "EXISTS\n", ""
+
+        if "mkdir -p" in command and "ucm_bench_" in command:
+            return 0, "", ""
+
+        if "rm -rf" in command and "ucm_bench_" in command:
+            return 0, "", ""
+
         if "tar -xzf" in command and "ucm_pkgs" in command:
             return 0, "", ""
 
