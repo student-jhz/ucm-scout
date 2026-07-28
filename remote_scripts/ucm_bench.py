@@ -5,7 +5,7 @@ import multiprocessing
 import secrets
 import time
 import os
-import glob
+import sys
 
 import numpy as np
 
@@ -141,7 +141,9 @@ def worker_loop(device_id, barrier, shard_size, shard_number,
 def main():
     args = parse_args()
 
-    os.makedirs(os.path.dirname(args.storage_backend) or ".", exist_ok=True)
+    if not os.path.isdir(args.storage_backend):
+        print(f"ERROR: storage backend path does not exist: {args.storage_backend}")
+        sys.exit(1)
 
     barrier = multiprocessing.Barrier(args.worker_number)
     workers = []
