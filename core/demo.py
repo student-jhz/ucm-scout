@@ -32,6 +32,15 @@ class MockSSHClient:
         if "echo ok" in command and "uname" in command:
             return 0, "Linux demo-host 5.15.0-generic x86_64 GNU/Linux\n", ""
 
+        if "command -v nvidia-smi" in command:
+            return 0, "NVIDIA\n", ""
+
+        if "command -v npu-smi" in command:
+            return 1, "", ""
+
+        if "ls /dev/davinci" in command or "ls -d /dev/davinci" in command:
+            return 1, "", ""
+
         if "ls -1p" in command:
             return 0, "bin/\ndev/\netc/\nhome/\nmodels/\nroot/\ntmp/\nusr/\nvar/\n", ""
 

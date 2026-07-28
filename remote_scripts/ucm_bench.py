@@ -5,6 +5,7 @@ import multiprocessing
 import secrets
 import time
 import os
+import glob
 
 import numpy as np
 
@@ -108,8 +109,9 @@ def run_load(epoch, device_id, store, block_ids, block_ptr, shard_size, shard_nu
     }
 
 
-def worker_loop(device_id, barrier, result_queue, shard_size, shard_number,
-                block_number, storage_backend, dump_epochs, load_epochs):
+def worker_loop(device_id, barrier, shard_size, shard_number,
+                block_number, storage_backend, dump_epochs, load_epochs,
+                output_prefix):
     store = create_store(shard_size, shard_number, storage_backend, device_id)
     block_ids = [secrets.token_bytes(16) for _ in range(block_number)]
     block_data = [make_array(shard_size * shard_number) for _ in range(block_number)]
@@ -130,7 +132,10 @@ def worker_loop(device_id, barrier, result_queue, shard_size, shard_number,
         worker_results["load"].append(r)
         barrier.wait()
 
-    result_queue.put(worker_results)
+    worker_file = f"{output_prefix}.worker{device_id}"
+    with open(worker_file, "w") as f:
+        json.dump(worker_results, f)
+    print(f"[worker {device_id}] results saved to {worker_file}")
 
 
 def main():
@@ -139,20 +144,17 @@ def main():
     os.makedirs(os.path.dirname(args.storage_backend) or ".", exist_ok=True)
 
     barrier = multiprocessing.Barrier(args.worker_number)
-    result_queue = multiprocessing.Queue()
     workers = []
 
-    try:
-        multiprocessing.set_start_method("spawn", force=True)
-    except RuntimeError:
-        pass
+    output_prefix = args.output.replace(".json", "")
 
     for i in range(args.worker_number):
         p = multiprocessing.Process(
             target=worker_loop,
-            args=(i, barrier, result_queue, args.shard_size, args.shard_number,
+            args=(i, barrier, args.shard_size, args.shard_number,
                   args.block_number, args.storage_backend,
-                  args.dump_epochs, args.load_epochs),
+                  args.dump_epochs, args.load_epochs,
+                  output_prefix),
         )
         workers.append(p)
         p.start()
@@ -162,13 +164,26 @@ def main():
 
     all_dump = []
     all_load = []
-    for _ in range(args.worker_number):
-        r = result_queue.get()
-        all_dump.extend(r["dump"])
-        all_load.extend(r["load"])
 
-    dump_bw = [c["bw_gbs"] for c in all_dump]
-    load_bw = [c["bw_gbs"] for c in all_load]
+    for i in range(args.worker_number):
+        worker_file = f"{output_prefix}.worker{i}"
+        try:
+            with open(worker_file, "r") as f:
+                data = json.load(f)
+            if data.get("dump"):
+                all_dump.extend(data["dump"])
+            if data.get("load"):
+                all_load.extend(data["load"])
+        except Exception as e:
+            print(f"[main] WARN: failed to read {worker_file}: {e}")
+        finally:
+            try:
+                os.remove(worker_file)
+            except OSError:
+                pass
+
+    dump_bw = [c["bw_gbs"] for c in all_dump] if all_dump else [0.0]
+    load_bw = [c["bw_gbs"] for c in all_load] if all_load else [0.0]
 
     total_size = args.shard_size * args.shard_number * args.block_number
 

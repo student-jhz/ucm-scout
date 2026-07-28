@@ -18,6 +18,32 @@ class UcmBandwidthController:
         self.progress = progress_callback or (lambda pct, msg: None)
         self.results = {}
 
+    def _detect_device_type(self):
+        self.log("[device] detecting device type...")
+        code, out, _ = self.ssh.execute(
+            "command -v nvidia-smi >/dev/null 2>&1 && echo NVIDIA || true", timeout=5
+        )
+        if "NVIDIA" in out:
+            self.log("[device] OK: NVIDIA GPU detected")
+            return "nvidia"
+
+        code, out, _ = self.ssh.execute(
+            "command -v npu-smi >/dev/null 2>&1 && echo ASCEND || true", timeout=5
+        )
+        if "ASCEND" in out:
+            self.log("[device] OK: Ascend NPU detected")
+            return "ascend"
+
+        code, out, _ = self.ssh.execute(
+            "ls /dev/davinci* >/dev/null 2>&1 && echo ASCEND || true", timeout=5
+        )
+        if "ASCEND" in out:
+            self.log("[device] OK: Ascend NPU detected (davinci)")
+            return "ascend"
+
+        self.log("[device] WARN: unknown device type, defaulting to nvidia")
+        return "nvidia"
+
     def get_docker_images(self):
         code, out, err = self.ssh.execute(
             "docker images --format '{{.Repository}}:{{.Tag}}' 2>/dev/null | grep -iE 'vllm'",
@@ -87,6 +113,8 @@ class UcmBandwidthController:
 
         self.log("[init] OK: SSH connected")
 
+        device_type = self._detect_device_type()
+
         temp_dir = self._check_and_prepare_storage(storage_backend)
         if not temp_dir:
             return None
@@ -112,7 +140,7 @@ class UcmBandwidthController:
             return None
 
         self.progress(15, "creating container...")
-        container_id = self._create_container(docker_image, model_path, actual_storage)
+        container_id = self._create_container(docker_image, model_path, actual_storage, device_type)
         if not container_id:
             self._cleanup_storage(temp_dir)
             return None
@@ -137,7 +165,7 @@ class UcmBandwidthController:
 
         self.progress(50, "running UCM benchmark...")
         bw_result = self._run_benchmark(container_id, shard_size, shard_number,
-                                        block_number, actual_storage, tp)
+                                        block_number, actual_storage, tp, device_type)
         if not bw_result:
             self._stop_container(container_id)
             self._cleanup_storage(temp_dir)
@@ -237,7 +265,7 @@ class UcmBandwidthController:
         self._extracted_whls = whl_files
         return True
 
-    def _create_container(self, docker_image, model_path, storage_backend):
+    def _create_container(self, docker_image, model_path, storage_backend, device_type):
         timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
         container_name = f"ucm_bench_{timestamp}"
 
@@ -245,15 +273,45 @@ class UcmBandwidthController:
         storage_backend = storage_backend.replace("\\", "/")
         remote_pkg = self.REMOTE_PKG_DIR.replace("\\", "/")
 
-        cmd = (
-            f"docker run -d --rm --gpus all "
+        volumes = (
             f"-v {model_path}:{model_path} "
             f"-v {storage_backend}:{storage_backend} "
             f"-v {remote_pkg}:{remote_pkg} "
-            f"--name {container_name} "
-            f"{docker_image} sleep infinity"
         )
-        self.log(f"[container] creating: {cmd}")
+
+        if device_type == "ascend":
+            code, dev_out, _ = self.ssh.execute("ls -d /dev/davinci* 2>/dev/null", timeout=5)
+            davinci_devices = [d.strip() for d in dev_out.strip().split("\n") if d.strip()]
+
+            self.log(f"[container] Ascend devices: {davinci_devices}")
+            devices = " ".join(f"--device {d}" for d in davinci_devices)
+            devices += " --device /dev/devmm_svm --device /dev/hisi_hdc"
+
+            ascend_volumes = (
+                "-v /usr/local/dcmi:/usr/local/dcmi:ro "
+                "-v /usr/local/Ascend/driver/lib64/:/usr/local/Ascend/driver/lib64/:ro "
+                "-v /usr/local/Ascend/driver/tools/hccn_tool:/usr/local/Ascend/driver/tools/hccn_tool:ro "
+                "-v /usr/local/bin/npu-smi:/usr/local/bin/npu-smi:ro "
+            )
+
+            cmd = (
+                f"docker run -d --rm "
+                f"{devices} "
+                f"--privileged --shm-size=1g "
+                f"{volumes} "
+                f"{ascend_volumes} "
+                f"--name {container_name} "
+                f"{docker_image} sleep infinity"
+            )
+        else:
+            cmd = (
+                f"docker run -d --rm --gpus all "
+                f"{volumes} "
+                f"--name {container_name} "
+                f"{docker_image} sleep infinity"
+            )
+
+        self.log(f"[container] creating ({device_type}): {cmd}")
         code, out, err = self.ssh.execute(cmd, timeout=30)
         container_id = out.strip()
         if code != 0:
@@ -262,6 +320,7 @@ class UcmBandwidthController:
             return None
         self.log(f"[container] OK: {container_id}")
         self.results["container_id"] = container_id
+        self.results["device_type"] = device_type
         return container_id
 
     def _install_wrapt(self, container_id, dep_whl_local):
@@ -334,16 +393,28 @@ class UcmBandwidthController:
             return False
 
     def _run_benchmark(self, container_id, shard_size, shard_number,
-                       block_number, storage_backend, tp):
+                       block_number, storage_backend, tp, device_type):
         remote_pkg = self.REMOTE_PKG_DIR
+        output_file = f"{remote_pkg}/ucm_bench_result.json"
+
+        ld_preload = ""
+        if device_type == "ascend":
+            ld_preload = (
+                "export UCM_PATH=$(pip show uc-manager 2>/dev/null | "
+                "grep Location | awk '{print $2}'); "
+                "export LD_LIBRARY_PATH=$UCM_PATH/ucm/shared/metrics:$LD_LIBRARY_PATH; "
+            )
+
         bench_cmd = (
-            f"docker exec {container_id} python3 {remote_pkg}/ucm_bench.py "
+            f"docker exec {container_id} bash -c '"
+            f"{ld_preload}"
+            f"PYTHONUNBUFFERED=1 stdbuf -oL python3 {remote_pkg}/ucm_bench.py "
             f"--worker-number {tp} "
             f"--shard-size {shard_size} "
             f"--shard-number {shard_number} "
             f"--block-number {block_number} "
             f"--storage-backend {storage_backend} "
-            f"--output {remote_pkg}/ucm_bench_result.json"
+            f"--output {output_file}'"
         )
         self.log(f"[bench] running: {bench_cmd}")
 
@@ -358,7 +429,7 @@ class UcmBandwidthController:
             return None
 
         code, out, err = self.ssh.execute(
-            f"cat {remote_pkg}/ucm_bench_result.json", timeout=10
+            f"cat {output_file}", timeout=10
         )
         if code != 0 or not out.strip():
             self.log(f"[bench] FAIL: cannot read result file")
@@ -367,8 +438,10 @@ class UcmBandwidthController:
 
         try:
             result = json.loads(out)
-            self.log(f"[bench] OK: dump_avg={result.get('dump_avg_bw_gbs', 0):.3f} GB/s, "
-                     f"load_avg={result.get('load_avg_bw_gbs', 0):.3f} GB/s")
+            dump_bw = float(result.get("dump_avg_bw_gbs", 0) or 0)
+            load_bw = float(result.get("load_avg_bw_gbs", 0) or 0)
+            self.log(f"[bench] OK: dump_avg={dump_bw:.3f} GB/s, "
+                     f"load_avg={load_bw:.3f} GB/s")
             return result
         except json.JSONDecodeError as e:
             self.log(f"[bench] FAIL: invalid result JSON - {e}")
