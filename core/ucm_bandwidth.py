@@ -401,7 +401,7 @@ class UcmBandwidthController:
         if device_type == "ascend":
             ld_preload = (
                 "export UCM_PATH=$(pip show uc-manager 2>/dev/null | "
-                "grep Location | awk '{print $2}'); "
+                "grep Location | awk \"{print \\$2}\"); "
                 "export LD_LIBRARY_PATH=$UCM_PATH/ucm/shared/metrics:$LD_LIBRARY_PATH; "
             )
 
