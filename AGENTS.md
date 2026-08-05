@@ -11,12 +11,20 @@ Python 3.9+ Tkinter GUI tool for UCM (Unified Cache Manager) bandwidth testing a
 python main.py
 
 # Run tests (unittest framework)
-python -m pytest tests/ -v
+python -m unittest discover -s tests -v
 
 # Build standalone EXE
 pip install pyinstaller
 pyinstaller build.spec --clean
 # Output: dist/UCM-Scout.exe
+```
+
+**IMPORTANT**: After every commit, rebuild EXE and commit it to repository using:
+```bash
+pyinstaller build.spec --clean
+git add -f dist/UCM-Scout.exe
+git commit -m "Update UCM-Scout.exe"
+git push origin main
 ```
 
 ## Architecture
@@ -110,4 +118,4 @@ Uses `unittest` (not pytest). All tests in `tests/` directory. Mock pattern: `un
 
 ## Build Artifacts
 
-`build/` and `dist/` are gitignored. Do NOT commit EXE to repository.
+`build/` and `dist/` are gitignored. However, **EXE must be committed to repository** using `git add -f dist/UCM-Scout.exe` after every code change.
