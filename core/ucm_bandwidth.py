@@ -17,6 +17,21 @@ class UcmBandwidthController:
         self.log = log_callback or (lambda msg: None)
         self.progress = progress_callback or (lambda pct, msg: None)
         self.results = {}
+        self._stopped = False
+        self._container_id = None
+        self._temp_dir = None
+
+    def stop(self):
+        """Stop running test and cleanup resources"""
+        self._stopped = True
+        if self._container_id:
+            self.log(f"[stop] stopping container {self._container_id[:12]}...")
+            self._stop_container(self._container_id)
+            self._container_id = None
+        if self._temp_dir:
+            self.log(f"[stop] cleaning up {self._temp_dir}...")
+            self._cleanup_storage(self._temp_dir)
+            self._temp_dir = None
 
     def _detect_device_type(self):
         self.log("[device] detecting device type...")
@@ -98,6 +113,10 @@ class UcmBandwidthController:
 
     def run(self, model_path, docker_image, ucm_pkg_local, dep_whl_local,
             storage_backend, request_len, tp, output_dir):
+        self._stopped = False
+        self._container_id = None
+        self._temp_dir = None
+        
         self.log(f"{'='*50}")
         self.log(f"[{datetime.now():%Y-%m-%d %H:%M:%S}] UCM bandwidth test started")
         self.log(f"  model_path: {model_path}")
@@ -118,6 +137,7 @@ class UcmBandwidthController:
         temp_dir = self._check_and_prepare_storage(storage_backend)
         if not temp_dir:
             return None
+        self._temp_dir = temp_dir
         actual_storage = temp_dir
 
         cfg = self.parse_model_config(model_path)
@@ -144,6 +164,7 @@ class UcmBandwidthController:
         if not container_id:
             self._cleanup_storage(temp_dir)
             return None
+        self._container_id = container_id
 
         self.progress(25, "installing wrapt dependency...")
         if not self._install_wrapt(container_id, dep_whl_local):
@@ -182,6 +203,9 @@ class UcmBandwidthController:
 
         self.progress(100, "UCM bandwidth test complete")
         self.log(f"[{datetime.now():%Y-%m-%d %H:%M:%S}] ====== ALL DONE ======")
+        
+        self._container_id = None
+        self._temp_dir = None
         return self.results
 
     def _check_and_prepare_storage(self, storage_backend):

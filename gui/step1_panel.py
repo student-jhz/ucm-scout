@@ -18,6 +18,7 @@ class Step1Panel(ttk.Frame):
         self._run_state = "idle"
         self._shard_size = 0
         self._shard_number = 0
+        self._controller = None
         self._build()
         on_lang_change(self.refresh_language)
 
@@ -241,6 +242,11 @@ class Step1Panel(ttk.Frame):
     def _on_stop(self):
         self._running = False
         self.log_frame.append(tr("step1.stopped"))
+        
+        if self._controller:
+            self._controller.stop()
+            self._controller = None
+        
         self.run_btn.configure(state=tk.NORMAL)
         self.stop_btn.configure(state=tk.DISABLED)
         self.progress["value"] = 0
@@ -257,8 +263,8 @@ class Step1Panel(ttk.Frame):
         def progress(pct, msg):
             self.after(0, lambda: self._update_progress(pct, msg))
 
-        controller = UcmBandwidthController(self.app.ssh, log, progress)
-        result = controller.run(
+        self._controller = UcmBandwidthController(self.app.ssh, log, progress)
+        result = self._controller.run(
             model_path=self.model_dir_entry.get(),
             docker_image=self.docker_var.get(),
             ucm_pkg_local=self.ucm_pkg_entry.get(),
@@ -269,6 +275,7 @@ class Step1Panel(ttk.Frame):
             output_dir=self.output_dir_entry.get() or "./results/step1",
         )
 
+        self._controller = None
         self.after(0, lambda: self._on_finish(result))
 
     def _update_progress(self, pct, msg):
