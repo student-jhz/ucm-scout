@@ -78,6 +78,10 @@ class Step2Panel(ttk.Frame):
     def _on_stop(self):
         self._running = False
         self.log_frame.append(tr("step2.stopped"))
+        self.run_btn.configure(state=tk.NORMAL)
+        self.stop_btn.configure(state=tk.DISABLED)
+        self.progress["value"] = 0
+        self.progress_label.configure(text="0%")
 
     def _run_online_test(self):
         from core.ttft_test import TTFTTestController
