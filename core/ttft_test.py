@@ -119,6 +119,7 @@ class TTFTTestController:
                     "prompt": prompt,
                     "max_tokens": 1,
                     "temperature": 0,
+                    "stream": True,
                 },
                 timeout=60,
             )
