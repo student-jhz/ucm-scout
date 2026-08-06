@@ -1,6 +1,8 @@
 import json
 import time
 import threading
+import random
+import secrets
 import requests
 from datetime import datetime
 
@@ -27,12 +29,15 @@ class TTFTTestController:
             self.log(f"ERROR: cannot reach service: {e}")
             return None
 
-        self.progress(20, "testing full prefill (cold start)...")
-        full_ttft = self._measure_ttft(base_url, model_name, request_len, concurrency, warmup=False)
+        seed = secrets.randbelow(1000000)
+        prompt = self._generate_prompt(request_len, seed)
+        self.log(f"  using random seed: {seed}")
 
-        self.progress(50, "testing HBM PC hit (warm cache)...")
-        self._warmup_cache(base_url, model_name, request_len)
-        hbm_ttft = self._measure_ttft(base_url, model_name, request_len, concurrency, warmup=True)
+        self.progress(20, "testing full prefill (cold start)...")
+        full_ttft = self._measure_ttft(base_url, model_name, prompt, concurrency)
+
+        self.progress(60, "testing HBM PC hit (same request)...")
+        hbm_ttft = self._measure_ttft(base_url, model_name, prompt, concurrency)
 
         self.progress(90, "collecting results...")
         self.results = {
@@ -42,6 +47,7 @@ class TTFTTestController:
             "model_path": model_path,
             "request_len": request_len,
             "concurrency": concurrency,
+            "random_seed": seed,
             "full_prefill_ttft_ms": full_ttft,
             "hbm_pc_ttft_ms": hbm_ttft,
             "timestamp": datetime.now().isoformat(),
@@ -51,8 +57,13 @@ class TTFTTestController:
         self.log(f"  full_prefill_ttft={full_ttft:.2f}ms, hbm_pc_ttft={hbm_ttft:.2f}ms")
         return self.results
 
-    def _measure_ttft(self, base_url, model_name, request_len, concurrency, warmup=False):
-        prompt = "hello " * request_len
+    def _generate_prompt(self, request_len, seed):
+        random.seed(seed)
+        words = ["hello", "world", "test", "data", "sample", "query", "input", "text"]
+        prompt_words = [random.choice(words) for _ in range(request_len)]
+        return " ".join(prompt_words)
+
+    def _measure_ttft(self, base_url, model_name, prompt, concurrency):
         ttft_values = []
         errors = []
         lock = threading.Lock()
@@ -107,25 +118,6 @@ class TTFTTestController:
         else:
             self.log("WARNING: could not measure TTFT")
             return 0.0
-
-    def _warmup_cache(self, base_url, model_name, request_len):
-        self.log("  warming up cache...")
-        prompt = "hello " * request_len
-        try:
-            requests.post(
-                f"{base_url}/v1/completions",
-                json={
-                    "model": model_name,
-                    "prompt": prompt,
-                    "max_tokens": 1,
-                    "temperature": 0,
-                    "stream": True,
-                },
-                timeout=60,
-            )
-        except Exception:
-            pass
-        time.sleep(1)
 
     def save_results(self, output_dir):
         import os
