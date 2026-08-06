@@ -90,6 +90,18 @@ class Step3Panel(ttk.Frame):
             shard_size = self.app.step1_panel.get_shard_size()
             shard_num = self.app.step1_panel.get_shard_number()
             blocks = self.app.step1_panel.get_block_number()
+            
+            if shard_size == 0 or shard_num == 0:
+                messagebox.showwarning(
+                    tr("title.warning"),
+                    "shard_size/shard_number is 0.\n"
+                    "Please ensure:\n"
+                    "1. SSH is connected\n"
+                    "2. Model path is filled in Step1\n"
+                    "3. config.json was successfully parsed (check Step1 logs)"
+                )
+                return
+            
             if shard_size > 0:
                 total_mb = shard_size * shard_num * blocks / 1e6
                 self.shard_info_var.set(tr("step3.shard_info",
@@ -128,6 +140,14 @@ class Step3Panel(ttk.Frame):
         shard_size = getattr(self, "_shard_size", 0)
         shard_num = getattr(self, "_shard_number", 0)
         blocks = getattr(self, "_block_number", 0)
+
+        if shard_size == 0 or shard_num == 0:
+            messagebox.showwarning(
+                tr("title.warning"),
+                "shard_size/shard_number is 0. Please click 'From Step1' button first,\n"
+                "or ensure Step1 has successfully parsed config.json."
+            )
+            return
 
         self.log_frame.clear()
         from core.analyzer import Analyzer
