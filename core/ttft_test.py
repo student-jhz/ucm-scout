@@ -63,6 +63,7 @@ class TTFTTestController:
                 "prompt": prompt,
                 "max_tokens": 1,
                 "temperature": 0,
+                "stream": True,
             }
             try:
                 t0 = time.time()
@@ -73,7 +74,11 @@ class TTFTTestController:
                     stream=True,
                 )
                 first_token_time = None
+                line_count = 0
                 for line in r.iter_lines(decode_unicode=True):
+                    line_count += 1
+                    if line_count <= 3:
+                        self.log(f"    [debug] line {line_count}: {line[:100]}")
                     if line and line.startswith("data: ") and not first_token_time:
                         first_token_time = time.time()
                         break
@@ -82,7 +87,7 @@ class TTFTTestController:
                     with lock:
                         ttft_values.append(ttft)
                 else:
-                    errors.append("No response data received")
+                    errors.append(f"No response data received (got {line_count} lines)")
             except Exception as e:
                 errors.append(str(e))
 
