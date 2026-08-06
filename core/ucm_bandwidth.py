@@ -96,9 +96,9 @@ class UcmBandwidthController:
             num_kv_heads = config.get("num_key_value_heads", config.get("num_attention_heads", 32))
             head_dim = config.get("head_dim", config.get("hidden_size", 4096) // config.get(
                 "num_attention_heads", 32))
-            # For standard models: per-layer KV cache = tokens × kv_heads × head_dim × 2 (fp16)
-            # head_dim here represents the dimension for all kv_heads combined
-            head_dim = num_kv_heads * head_dim
+            # KV cache size per layer: tokens × kv_heads × head_dim × 2(K and V) × dtype_bytes
+            # = BLOCK_SIZE × kv_heads × head_dim × 2(K and V) × ELEM_SIZE
+            head_dim = num_kv_heads * head_dim * 2
 
         if not num_layers or not head_dim:
             self.log(f"[config] FAIL: missing fields - num_hidden_layers={num_layers}, "
