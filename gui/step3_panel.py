@@ -11,6 +11,9 @@ class Step3Panel(ttk.Frame):
         super().__init__(parent, **kwargs)
         self.app = app
         self._result_data = None
+        self._shard_size = 0
+        self._shard_number = 0
+        self._block_number = 0
         self._build()
         on_lang_change(self.refresh_language)
 
@@ -21,6 +24,15 @@ class Step3Panel(ttk.Frame):
         self.hint_label = ttk.Label(self.config_frame, text=tr("step3.hint"),
                                     font=("", 9, "italic"))
         self.hint_label.pack(anchor=tk.W, pady=(0, 5))
+
+        row0 = ttk.Frame(self.config_frame)
+        row0.pack(fill=tk.X, pady=2)
+        self.model_dir_entry = LabeledEntry(row0, tr("step1.model_dir"), "", width=45, label_width=24)
+        self.model_dir_entry.pack(side=tk.LEFT, padx=(0, 5))
+        self.browse_model_btn = ttk.Button(row0, text=tr("step1.browse"), width=8,
+                                            command=self._browse_model)
+        self.browse_model_btn.pack(side=tk.LEFT)
+        self.model_dir_entry.entry.bind("<FocusOut>", lambda e: self._on_model_change())
 
         row1 = ttk.Frame(self.config_frame)
         row1.pack(fill=tk.X, pady=2)
@@ -82,6 +94,47 @@ class Step3Panel(ttk.Frame):
         ttk.Label(self.result_frame, textvariable=self.ratio_var,
                   font=("Consolas", 10), foreground="green").pack(anchor=tk.W, pady=2)
 
+    def _browse_model(self):
+        if not self.app.ssh or not self.app.ssh.connected:
+            messagebox.showwarning(tr("title.warning"), tr("msg.no_ssh"))
+            return
+        from gui.widgets import RemoteDirBrowser
+        browser = RemoteDirBrowser(self, self.app.ssh,
+                                    title=tr("step1.browse_model_title"))
+        path = browser.show()
+        if path:
+            self.model_dir_entry.set(path)
+            self._on_model_change()
+
+    def _on_model_change(self):
+        model_path = self.model_dir_entry.get()
+        if not model_path or not self.app.ssh or not self.app.ssh.connected:
+            return
+        from core.ucm_bandwidth import UcmBandwidthController
+        ctrl = UcmBandwidthController(self.app.ssh)
+        cfg = ctrl.parse_model_config(model_path)
+        if cfg:
+            self._shard_size, self._shard_number = cfg
+            blocks = self.app.scenario_params.get_request_len() // 128
+            self._block_number = blocks
+            self._update_shard_info()
+        else:
+            self._shard_size, self._shard_number = 0, 0
+            self._block_number = 0
+            self.shard_info_var.set("")
+
+    def _update_shard_info(self):
+        if self._shard_size > 0:
+            total_mb = self._shard_size * self._shard_number * self._block_number / 1e6
+            self.shard_info_var.set(tr("step3.shard_info",
+                size=self._shard_size,
+                size_kb=self._shard_size / 1024,
+                num=self._shard_number,
+                blocks=self._block_number,
+                total_mb=total_mb))
+        else:
+            self.shard_info_var.set("")
+
     def _auto_fill_step1(self):
         if self.app.step1_panel:
             bw = self.app.step1_panel.get_bandwidth()
@@ -89,7 +142,6 @@ class Step3Panel(ttk.Frame):
                 self.bw_entry.set(f"{bw:.2f}")
             shard_size = self.app.step1_panel.get_shard_size()
             shard_num = self.app.step1_panel.get_shard_number()
-            blocks = self.app.step1_panel.get_block_number()
             
             if shard_size == 0 or shard_num == 0:
                 messagebox.showwarning(
@@ -102,19 +154,15 @@ class Step3Panel(ttk.Frame):
                 )
                 return
             
-            if shard_size > 0:
-                total_mb = shard_size * shard_num * blocks / 1e6
-                self.shard_info_var.set(tr("step3.shard_info",
-                    size=shard_size, num=shard_num, blocks=blocks, total_mb=total_mb))
-            if not bw:
-                messagebox.showinfo(tr("title.info"), tr("msg.step1_no_bw"))
             self._shard_size = shard_size
             self._shard_number = shard_num
-            self._block_number = blocks
+            self._update_shard_info()
+            
+            if not bw:
+                messagebox.showinfo(tr("title.info"), tr("msg.step1_no_bw"))
         else:
             self._shard_size = 0
             self._shard_number = 0
-            self._block_number = 0
 
     def _auto_fill_ttft(self):
         if self.app.step2_panel:
@@ -139,13 +187,15 @@ class Step3Panel(ttk.Frame):
 
         shard_size = getattr(self, "_shard_size", 0)
         shard_num = getattr(self, "_shard_number", 0)
-        blocks = getattr(self, "_block_number", 0)
+        blocks = max(1, self.app.scenario_params.get_request_len() // 128)
 
         if shard_size == 0 or shard_num == 0:
             messagebox.showwarning(
                 tr("title.warning"),
-                "shard_size/shard_number is 0. Please click 'From Step1' button first,\n"
-                "or ensure Step1 has successfully parsed config.json."
+                "shard_size/shard_number is 0.\n"
+                "Please either:\n"
+                "1. Fill model path above to auto-parse config.json, OR\n"
+                "2. Click 'From Step1' if Step1 has valid data"
             )
             return
 
@@ -208,6 +258,8 @@ class Step3Panel(ttk.Frame):
     def refresh_language(self):
         self.config_frame.configure(text=tr("step3.config"))
         self.hint_label.configure(text=tr("step3.hint"))
+        self.model_dir_entry.set_label(tr("step1.model_dir"))
+        self.browse_model_btn.configure(text=tr("step1.browse"))
         self.bw_entry.set_label(tr("step3.bw"))
         self.from_step1_btn.configure(text=tr("step3.from_step1"))
         self.full_ttft_entry.set_label(tr("step3.full_ttft"))
