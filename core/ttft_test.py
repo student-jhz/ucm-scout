@@ -30,14 +30,14 @@ class TTFTTestController:
             return None
 
         seed = secrets.randbelow(1000000)
-        prompt = self._generate_prompt(request_len, seed)
-        self.log(f"  using random seed: {seed}")
+        prompts = [self._generate_prompt(request_len, seed + i) for i in range(concurrency)]
+        self.log(f"  using random seed: {seed}, generated {concurrency} unique prompts")
 
         self.progress(20, "testing full prefill (cold start)...")
-        full_ttft = self._measure_ttft(base_url, model_name, prompt, concurrency)
+        full_ttft = self._measure_ttft(base_url, model_name, prompts, concurrency)
 
-        self.progress(60, "testing HBM PC hit (same request)...")
-        hbm_ttft = self._measure_ttft(base_url, model_name, prompt, concurrency)
+        self.progress(60, "testing HBM PC hit (same requests)...")
+        hbm_ttft = self._measure_ttft(base_url, model_name, prompts, concurrency)
 
         self.progress(90, "collecting results...")
         self.results = {
@@ -63,12 +63,13 @@ class TTFTTestController:
         prompt_words = [random.choice(words) for _ in range(request_len)]
         return " ".join(prompt_words)
 
-    def _measure_ttft(self, base_url, model_name, prompt, concurrency):
+    def _measure_ttft(self, base_url, model_name, prompts, concurrency):
         ttft_values = []
         errors = []
         lock = threading.Lock()
 
-        def worker():
+        def worker(worker_id):
+            prompt = prompts[worker_id]
             payload = {
                 "model": model_name,
                 "prompt": prompt,
@@ -89,7 +90,7 @@ class TTFTTestController:
                 for line in r.iter_lines(decode_unicode=True):
                     line_count += 1
                     if line_count <= 3:
-                        self.log(f"    [debug] line {line_count}: {line[:100]}")
+                        self.log(f"    [debug] worker{worker_id} line {line_count}: {line[:100]}")
                     if line and line.startswith("data: ") and not first_token_time:
                         first_token_time = time.time()
                         break
@@ -98,11 +99,11 @@ class TTFTTestController:
                     with lock:
                         ttft_values.append(ttft)
                 else:
-                    errors.append(f"No response data received (got {line_count} lines)")
+                    errors.append(f"Worker {worker_id}: No response data received (got {line_count} lines)")
             except Exception as e:
-                errors.append(str(e))
+                errors.append(f"Worker {worker_id}: {str(e)}")
 
-        threads = [threading.Thread(target=worker) for _ in range(concurrency)]
+        threads = [threading.Thread(target=worker, args=(i,)) for i in range(concurrency)]
         for t in threads:
             t.start()
         for t in threads:
