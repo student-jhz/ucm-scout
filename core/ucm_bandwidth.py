@@ -380,9 +380,9 @@ class UcmBandwidthController:
             return False
 
         ucm_whls = [w for w in self._extracted_whls
-                     if "wrapt" not in os.path.basename(w).lower()]
+                     if os.path.basename(w).lower().startswith("uc_manager")]
         if not ucm_whls:
-            self.log(f"[install] FAIL: no UCM whl found (all whls are wrapt)")
+            self.log(f"[install] FAIL: no uc_manager whl found")
             return False
 
         self.log(f"[install] step 2/2: UCM package")
