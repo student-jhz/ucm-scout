@@ -33,8 +33,10 @@ class Step1Panel(ttk.Frame):
         self.browse_model_btn = ttk.Button(row0, text=tr("step1.browse"), width=8,
                                             command=self._browse_model)
         self.browse_model_btn.pack(side=tk.LEFT)
+        self.epochs_entry = LabeledEntry(row0, tr("step1.epochs"), "3", width=6, label_width=13)
+        self.epochs_entry.pack(side=tk.RIGHT)
         self.tp_entry = LabeledEntry(row0, tr("step1.tp"), "1", width=6, label_width=13)
-        self.tp_entry.pack(side=tk.RIGHT)
+        self.tp_entry.pack(side=tk.RIGHT, padx=(5, 0))
         self.model_dir_entry.entry.bind("<FocusOut>", lambda e: self._on_model_change())
 
         row1 = ttk.Frame(self.config_frame)
@@ -273,6 +275,7 @@ class Step1Panel(ttk.Frame):
             request_len=self.app.scenario_params.get_request_len(),
             tp=int(self.tp_entry.get() or 1),
             output_dir=self.output_dir_entry.get() or "./results/step1",
+            epochs=int(self.epochs_entry.get() or 3),
         )
 
         self._controller = None

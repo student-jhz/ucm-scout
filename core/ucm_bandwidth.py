@@ -114,7 +114,10 @@ class UcmBandwidthController:
         return shard_size, shard_number
 
     def run(self, model_path, docker_image, ucm_pkg_local, dep_whl_local,
-            storage_backend, request_len, tp, output_dir):
+            storage_backend, request_len, tp, output_dir, epochs=None):
+        if epochs is None:
+            epochs = 3  # Default 3 epochs for faster testing
+        
         self._stopped = False
         self._container_id = None
         self._temp_dir = None
@@ -188,7 +191,7 @@ class UcmBandwidthController:
 
         self.progress(50, "running UCM benchmark...")
         bw_result = self._run_benchmark(container_id, shard_size, shard_number,
-                                        block_number, actual_storage, tp, device_type)
+                                        block_number, actual_storage, tp, device_type, epochs)
         if not bw_result:
             self._stop_container(container_id)
             self._cleanup_storage(temp_dir)
@@ -419,7 +422,7 @@ class UcmBandwidthController:
             return False
 
     def _run_benchmark(self, container_id, shard_size, shard_number,
-                       block_number, storage_backend, tp, device_type):
+                       block_number, storage_backend, tp, device_type, epochs=3):
         remote_pkg = self.REMOTE_PKG_DIR
         output_file = f"{remote_pkg}/ucm_bench_result.json"
 
@@ -440,6 +443,8 @@ class UcmBandwidthController:
             f"--shard-number {shard_number} "
             f"--block-number {block_number} "
             f"--storage-backend {storage_backend} "
+            f"--dump-epochs {epochs} "
+            f"--load-epochs {epochs} "
             f"--output {output_file}'"
         )
         self.log(f"[bench] running: {bench_cmd}")
