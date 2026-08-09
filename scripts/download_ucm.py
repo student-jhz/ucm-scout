@@ -8,7 +8,7 @@ from collections import OrderedDict
 OUTPUT_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "ucm_src")
 
 UCM_GIT_URL = "git@github.com:ModelEngine-Group/unified-cache-management.git"
-UCM_BRANCH = "develop"
+UCM_TAG = "v0.6.0"
 
 KEEP_TOP = [
     "setup.py",
@@ -63,10 +63,10 @@ def _rsync_files(src_dir, dst_dir):
 
 
 def download_ucm():
-    print(f"[UCM] cloning {UCM_GIT_URL}#{UCM_BRANCH} ...")
+    print(f"[UCM] cloning {UCM_GIT_URL}#{UCM_TAG} ...")
     with tempfile.TemporaryDirectory() as tmp:
         clone_dir = os.path.join(tmp, "ucm-clone")
-        _run_git(["clone", "--depth", "1", "--branch", UCM_BRANCH, UCM_GIT_URL, clone_dir])
+        _run_git(["clone", "--depth", "1", "--branch", UCM_TAG, UCM_GIT_URL, clone_dir])
 
         for rel in KEEP_TOP:
             src = os.path.join(clone_dir, rel)

@@ -20,7 +20,7 @@ python main.py
 ### 方式三：自行构建 EXE
 
 ```bash
-# 1. 下载 UCM 源码（构建前执行一次）
+# 1. 下载 UCM 源码（构建前执行一次，固定下载 UCM tag v0.6.0）
 python scripts/download_ucm.py
 
 # 2. 安装 PyInstaller 并构建
