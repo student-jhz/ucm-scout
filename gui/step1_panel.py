@@ -76,6 +76,15 @@ class Step1Panel(ttk.Frame):
                                              command=self._browse_output)
         self.browse_output_btn.pack(side=tk.LEFT)
 
+        row5 = ttk.Frame(self.config_frame)
+        row5.pack(fill=tk.X, pady=2)
+        self.ascend_label = ttk.Label(row5, text=tr("step1.ascend_type"), width=22, anchor=tk.W)
+        self.ascend_label.pack(side=tk.LEFT, padx=(0, 5))
+        self.ascend_var = tk.StringVar(value="A2")
+        self.ascend_combo = ttk.Combobox(row5, textvariable=self.ascend_var,
+                                          values=["A2", "A3"], state="readonly", width=10)
+        self.ascend_combo.pack(side=tk.LEFT)
+
         self.shard_info_var = tk.StringVar(value="")
         self.shard_info_label = ttk.Label(self.config_frame, textvariable=self.shard_info_var,
                                            font=("", 9, "italic"), foreground="gray")
@@ -257,6 +266,7 @@ class Step1Panel(ttk.Frame):
             tp=int(self.tp_entry.get() or 1),
             output_dir=self.output_dir_entry.get() or "./results/step1",
             epochs=int(self.epochs_entry.get() or 3),
+            ascend_type=self.ascend_var.get(),
         )
 
         self._controller = None
@@ -309,6 +319,7 @@ class Step1Panel(ttk.Frame):
         self.browse_storage_btn.configure(text=tr("step1.browse"))
         self.output_dir_entry.set_label(tr("step1.output_dir"))
         self.browse_output_btn.configure(text=tr("step1.browse"))
+        self.ascend_label.configure(text=tr("step1.ascend_type"))
         self.run_btn.configure(text=tr("step1.run"))
         self.stop_btn.configure(text=tr("step1.stop"))
         self.result_frame.configure(text=tr("step1.result"))

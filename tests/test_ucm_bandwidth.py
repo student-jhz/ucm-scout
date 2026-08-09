@@ -164,20 +164,26 @@ class TestUcmBandwidthController(unittest.TestCase):
             shutil.rmtree(ucm_dir)
 
     def test_install_ucm_source_calls_pip_with_platform(self):
-        self.ctrl._install_ucm_source("abcdef", "nvidia")
+        self.ctrl._install_ucm_source("abcdef", "nvidia", "A2")
         cmds = [m for m in self.log_msgs if "pip install" in m]
         self.assertTrue(any("PLATFORM=cuda" in m for m in cmds),
                         "should set PLATFORM=cuda for NVIDIA device")
 
-    def test_install_ucm_source_ascend(self):
-        self.ctrl._install_ucm_source("abcdef", "ascend")
+    def test_install_ucm_source_ascend_a2(self):
+        self.ctrl._install_ucm_source("abcdef", "ascend", "A2")
         cmds = [m for m in self.log_msgs if "pip install" in m]
         self.assertTrue(any("PLATFORM=ascend" in m for m in cmds),
-                        "should set PLATFORM=ascend for Ascend device")
+                        "should set PLATFORM=ascend for Ascend A2")
+
+    def test_install_ucm_source_ascend_a3(self):
+        self.ctrl._install_ucm_source("abcdef", "ascend", "A3")
+        cmds = [m for m in self.log_msgs if "pip install" in m]
+        self.assertTrue(any("PLATFORM=ascend-a3" in m for m in cmds),
+                        "should set PLATFORM=ascend-a3 for Ascend A3")
 
     def test_sed_patches_download_dependence(self):
         self.ssh._sed_called = False
-        self.ctrl._install_ucm_source("abcdef", "nvidia")
+        self.ctrl._install_ucm_source("abcdef", "nvidia", "A2")
         self.assertTrue(self.ssh._sed_called,
                         "should call sed to set DOWNLOAD_DEPENDENCE=OFF")
 

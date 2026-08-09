@@ -107,7 +107,7 @@
 - 全局日志窗
 
 ### 2.12 `gui/step1_panel.py` — Step1 标签页
-- 模型路径（远端目录浏览器）、Docker 镜像（自动刷新+输入筛选）、依赖包（本地 .whl 文件选择）、存储路径（远端目录浏览器）、TP 数量、输出目录
+- 模型路径（远端目录浏览器）、Docker 镜像（自动刷新+输入筛选）、依赖包（本地 .whl 文件选择）、Ascend 型号（A2/A3 下拉，仅影响 Ascend 编译的 PLATFORM 值）、存储路径（远端目录浏览器）、TP 数量、输出目录
 - UCM 源码已内置在 EXE 中，无需用户选择
 - 自动解析 config.json 显示 shard_size / shard_number
 - 后台线程执行 UcmBandwidthController

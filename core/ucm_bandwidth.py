@@ -116,7 +116,8 @@ class UcmBandwidthController:
         return shard_size, shard_number
 
     def run(self, model_path, docker_image, dep_whl_local,
-            storage_backend, request_len, tp, output_dir, epochs=None):
+            storage_backend, request_len, tp, output_dir, epochs=None,
+            ascend_type="A2"):
         if epochs is None:
             epochs = 3
 
@@ -179,7 +180,7 @@ class UcmBandwidthController:
             return None
 
         self.progress(35, "building UCM from source...")
-        if not self._install_ucm_source(container_id, device_type):
+        if not self._install_ucm_source(container_id, device_type, ascend_type):
             self._stop_container(container_id)
             self._cleanup_storage(temp_dir)
             return None
@@ -382,8 +383,13 @@ class UcmBandwidthController:
         self.log(f"[install] OK: wrapt installed")
         return True
 
-    def _install_ucm_source(self, container_id, device_type):
-        platform = "cuda" if device_type == "nvidia" else "ascend"
+    def _install_ucm_source(self, container_id, device_type, ascend_type="A2"):
+        if device_type == "nvidia":
+            platform = "cuda"
+        elif ascend_type == "A3":
+            platform = "ascend-a3"
+        else:
+            platform = "ascend"
         ucm_src = self.REMOTE_UCM_SRC
 
         self.log(f"[install] patching CMakeLists.txt to use bundled dependencies ...")
