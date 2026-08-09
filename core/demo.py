@@ -62,6 +62,9 @@ class MockSSHClient:
         if "mkdir" in command and "ucm_pkgs" in command:
             return 0, "", ""
 
+        if "sed -i" in command and "DOWNLOAD_DEPENDENCE" in command:
+            return 0, "", ""
+
         if "test -d" in command and "EXISTS" in command:
             return 0, "EXISTS\n", ""
 

@@ -13,6 +13,9 @@ python main.py
 # Run tests (unittest framework)
 python -m unittest discover -s tests -v
 
+# Download UCM source (required before first build)
+python scripts/download_ucm.py
+
 # Build standalone EXE
 pip install pyinstaller
 pyinstaller build.spec --clean
@@ -38,6 +41,7 @@ main.py → gui/main_window.py (Tk GUI)
 core/ = business logic (no UI dependencies)
 gui/ = presentation layer (Tkinter)
 remote_scripts/ = uploaded to container for execution
+ucm_src/ = UCM source code + C++ compile deps bundled into EXE (downloaded via download_ucm.py)
 ```
 
 **Panel communication**: Panels access each other via `self.app` (MainWindow reference), e.g., `self.app.step1_panel.get_bandwidth()`
@@ -46,7 +50,7 @@ remote_scripts/ = uploaded to container for execution
 
 ### Three-Step Flow
 
-1. **Step 1 (Bandwidth)**: SSH → parse remote `config.json` (auto-calc shard_size/shard_number) → upload UCM packages → create Docker container → run `ucm_bench.py` → cleanup
+1. **Step 1 (Bandwidth)**: SSH → parse remote `config.json` (auto-calc shard_size/shard_number) → upload UCM source code + C++ compile deps (bundled in EXE) + wrapt .whl → create Docker container → pip install wrapt + patch CMakeLists (DOWNLOAD_DEPENDENCE=OFF) + build UCM from source via `PLATFORM=cuda pip install .` → run `ucm_bench.py` → cleanup
 2. **Step 2 (TTFT)**: HTTP POST to vLLM `/v1/completions` (streaming) → measure time to first token for cold (full prefill) and hot (HBM PC hit) scenarios
 3. **Step 3 (Analysis)**: Uses bandwidth + TTFT data to calculate UCM PC performance range
 

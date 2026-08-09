@@ -100,7 +100,6 @@ class MainWindow(tk.Tk):
                 self.ssh_panel.user_entry.set(tr("demo.user"))
                 self.ssh_panel.pwd_entry.set(tr("demo.pwd"))
                 self.step2_panel.service_url_entry.set(tr("demo.service_url"))
-                self.step1_panel.ucm_pkg_entry.set("./demo-package.tar.gz")
                 self.step1_panel.ucm_dep_entry.set("./wrapt-demo.whl")
                 self.step1_panel.storage_entry.set("/tmp/demo_kvcache")
             except Exception as e:

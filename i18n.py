@@ -28,7 +28,7 @@ _translations = {
         "step1.tp": "TP 数量:",
         "step1.docker_image": "Docker 镜像:",
         "step1.docker_refresh": "刷新",
-        "step1.ucm_pkg": "UCM 软件包 (.tar.gz):",
+        "step1.ucm_pkg": "UCM source (bundled in EXE)",
         "step1.ucm_dep": "依赖包 (.whl):",
         "step1.storage_backend": "存储后端路径:",
         "step1.output_dir": "输出目录:",
@@ -44,7 +44,6 @@ _translations = {
         "step1.shard_info": "shard_size: {size}B ({size_kb:.1f}KB) | shard_number: {num} | blocks: {blocks}",
         "step1.browse_model_title": "选择模型权重目录",
         "step1.browse_output_title": "选择输出目录",
-        "step1.browse_pkg_title": "选择 UCM 软件包",
         "step1.browse_dep_title": "选择依赖包",
 
         "step2.tab": "Step 2: TTFT 测试",
@@ -158,7 +157,7 @@ _translations = {
         "step1.tp": "TP Count:",
         "step1.docker_image": "Docker Image:",
         "step1.docker_refresh": "Refresh",
-        "step1.ucm_pkg": "UCM Package (.tar.gz):",
+        "step1.ucm_pkg": "UCM source (bundled in EXE)",
         "step1.ucm_dep": "Dependency (.whl):",
         "step1.storage_backend": "Storage Backend:",
         "step1.output_dir": "Output Dir:",
@@ -174,7 +173,6 @@ _translations = {
         "step1.shard_info": "shard_size: {size}B ({size_kb:.1f}KB) | shard_number: {num} | blocks: {blocks}",
         "step1.browse_model_title": "Select Model Weight Directory",
         "step1.browse_output_title": "Select Output Directory",
-        "step1.browse_pkg_title": "Select UCM Package",
         "step1.browse_dep_title": "Select Dependency File",
 
         "step2.tab": "Step 2: TTFT Test",

@@ -11,6 +11,7 @@ a = Analysis(
     binaries=[],
     datas=[
         ("remote_scripts", "remote_scripts"),
+        ("ucm_src", "ucm_src"),
     ],
     hiddenimports=[
         "tkinter",

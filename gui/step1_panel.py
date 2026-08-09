@@ -54,33 +54,25 @@ class Step1Panel(ttk.Frame):
 
         row2 = ttk.Frame(self.config_frame)
         row2.pack(fill=tk.X, pady=2)
-        self.ucm_pkg_entry = LabeledEntry(row2, tr("step1.ucm_pkg"), "", width=45, label_width=22)
-        self.ucm_pkg_entry.pack(side=tk.LEFT, padx=(0, 5))
-        self.browse_pkg_btn = ttk.Button(row2, text=tr("step1.browse"), width=8,
-                                          command=self._browse_pkg)
-        self.browse_pkg_btn.pack(side=tk.LEFT)
-
-        row3 = ttk.Frame(self.config_frame)
-        row3.pack(fill=tk.X, pady=2)
-        self.ucm_dep_entry = LabeledEntry(row3, tr("step1.ucm_dep"), "", width=45, label_width=22)
+        self.ucm_dep_entry = LabeledEntry(row2, tr("step1.ucm_dep"), "", width=45, label_width=22)
         self.ucm_dep_entry.pack(side=tk.LEFT, padx=(0, 5))
-        self.browse_dep_btn = ttk.Button(row3, text=tr("step1.browse"), width=8,
+        self.browse_dep_btn = ttk.Button(row2, text=tr("step1.browse"), width=8,
                                           command=self._browse_dep)
         self.browse_dep_btn.pack(side=tk.LEFT)
 
-        row4 = ttk.Frame(self.config_frame)
-        row4.pack(fill=tk.X, pady=2)
-        self.storage_entry = LabeledEntry(row4, tr("step1.storage_backend"), "/data/kvcache", width=45, label_width=22)
+        row3 = ttk.Frame(self.config_frame)
+        row3.pack(fill=tk.X, pady=2)
+        self.storage_entry = LabeledEntry(row3, tr("step1.storage_backend"), "/data/kvcache", width=45, label_width=22)
         self.storage_entry.pack(side=tk.LEFT, padx=(0, 5))
-        self.browse_storage_btn = ttk.Button(row4, text=tr("step1.browse"), width=8,
+        self.browse_storage_btn = ttk.Button(row3, text=tr("step1.browse"), width=8,
                                               command=self._browse_storage)
         self.browse_storage_btn.pack(side=tk.LEFT)
 
-        row5 = ttk.Frame(self.config_frame)
-        row5.pack(fill=tk.X, pady=2)
-        self.output_dir_entry = LabeledEntry(row5, tr("step1.output_dir"), "./results/step1", width=45, label_width=22)
+        row4 = ttk.Frame(self.config_frame)
+        row4.pack(fill=tk.X, pady=2)
+        self.output_dir_entry = LabeledEntry(row4, tr("step1.output_dir"), "./results/step1", width=45, label_width=22)
         self.output_dir_entry.pack(side=tk.LEFT, padx=(0, 5))
-        self.browse_output_btn = ttk.Button(row5, text=tr("step1.browse"), width=8,
+        self.browse_output_btn = ttk.Button(row4, text=tr("step1.browse"), width=8,
                                              command=self._browse_output)
         self.browse_output_btn.pack(side=tk.LEFT)
 
@@ -137,13 +129,6 @@ class Step1Panel(ttk.Frame):
         path = filedialog.askdirectory(title=tr("step1.browse_output_title"))
         if path:
             self.output_dir_entry.set(path)
-
-    def _browse_pkg(self):
-        path = filedialog.askopenfilename(
-            title=tr("step1.browse_pkg_title"),
-            filetypes=[("Tar Gzip", "*.tar.gz"), ("All Files", "*.*")])
-        if path:
-            self.ucm_pkg_entry.set(path)
 
     def _browse_dep(self):
         path = filedialog.askopenfilename(
@@ -213,9 +198,6 @@ class Step1Panel(ttk.Frame):
         if not self.docker_var.get():
             messagebox.showwarning(tr("title.validation_error"), tr("msg.no_docker_image"))
             return
-        if not self.ucm_pkg_entry.get():
-            messagebox.showwarning(tr("title.validation_error"), tr("msg.no_ucm_pkg"))
-            return
         if not self.ucm_dep_entry.get():
             messagebox.showwarning(tr("title.validation_error"), tr("msg.no_ucm_dep"))
             return
@@ -269,7 +251,6 @@ class Step1Panel(ttk.Frame):
         result = self._controller.run(
             model_path=self.model_dir_entry.get(),
             docker_image=self.docker_var.get(),
-            ucm_pkg_local=self.ucm_pkg_entry.get(),
             dep_whl_local=self.ucm_dep_entry.get(),
             storage_backend=self.storage_entry.get(),
             request_len=self.app.scenario_params.get_request_len(),
@@ -319,10 +300,9 @@ class Step1Panel(ttk.Frame):
         self.model_dir_entry.set_label(tr("step1.model_dir"))
         self.browse_model_btn.configure(text=tr("step1.browse"))
         self.tp_entry.set_label(tr("step1.tp"))
+        self.epochs_entry.set_label(tr("step1.epochs"))
         self.docker_label.configure(text=tr("step1.docker_image"))
         self.docker_refresh_btn.configure(text=tr("step1.docker_refresh"))
-        self.ucm_pkg_entry.set_label(tr("step1.ucm_pkg"))
-        self.browse_pkg_btn.configure(text=tr("step1.browse"))
         self.ucm_dep_entry.set_label(tr("step1.ucm_dep"))
         self.browse_dep_btn.configure(text=tr("step1.browse"))
         self.storage_entry.set_label(tr("step1.storage_backend"))

@@ -20,11 +20,15 @@ python main.py
 ### 方式三：自行构建 EXE
 
 ```bash
+# 1. 下载 UCM 源码（构建前执行一次）
+python scripts/download_ucm.py
+
+# 2. 安装 PyInstaller 并构建
 pip install pyinstaller
 pyinstaller build.spec --clean
 ```
 
-构建产物位于 `dist/ucm_check_tool.exe`。
+构建产物位于 `dist/UCM-Scout.exe`。
 
 ## 界面说明
 
@@ -46,11 +50,13 @@ pyinstaller build.spec --clean
 1. 确保顶部 SSH 已连接（显示绿色 "connected"）
 2. 填写模型权重目录 → 自动解析 `config.json`，计算 `shard_size` 和 `shard_number`
 3. 点击 **Refresh** 获取远端 Docker 镜像列表（自动过滤 vllm 相关镜像）
-4. 选择 UCM 软件包（`.tar.gz`）和依赖包（`.whl`）
+4. 选择依赖包（`.whl`，如 `wrapt-1.17.2-*.whl`）
 5. 填写存储后端路径
 6. 点击 **Execute Bandwidth Test**
 
-程序自动：上传包 → 创建临时容器 → 挂载模型/存储路径 → pip 安装 UCM → 执行 `dump_data`/`load_data` 测量 KV cache 读写带宽 → 清理容器
+> UCM 源码及其 C++ 编译依赖（fmt, spdlog, pybind11, zlib）已打包在 EXE 内，运行时会自动上传到远端容器并从源码编译安装（无需再选择 `.tar.gz` 包）。
+
+程序自动：上传源码+依赖 → 创建临时容器 → 挂载模型/存储路径 → pip 安装 wrapt → 从源码编译安装 UCM → 执行 `dump_data`/`load_data` 测量 KV cache 读写带宽 → 清理容器
 
 > 带宽测试使用 UCM 底层存储引擎（Posix + AIO），测量 `shard_size × shard_number × block_number` 的 IO 吞吐。
 

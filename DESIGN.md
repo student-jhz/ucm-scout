@@ -77,7 +77,9 @@
 
 ### 2.6 `core/ucm_bandwidth.py` — 带宽测试控制器
 - 编排整个 Docker + UCM Store 带宽测试流程
-- 核心方法：`run()` 包含 13 个子步骤，每步有 `[module] OK/FAIL` 日志
+- 核心方法：`run()` 包含 12 个子步骤，每步有 `[module] OK/FAIL` 日志
+- UCM 源码和 C++ 编译依赖（fmt, spdlog, pybind11, zlib）从 EXE 内置的 `ucm_src/` 目录打包上传
+- 在容器内通过 `sed` 将 `DOWNLOAD_DEPENDENCE` 设为 OFF，然后 `PLATFORM={cuda|ascend} pip install --no-build-isolation --no-deps .` 从源码编译安装
 
 ### 2.7 `core/ttft_test.py` — TTFT 测试控制器
 - 在线模式：向 vLLM API 发送流式请求，测量首 token 延迟
@@ -105,7 +107,8 @@
 - 全局日志窗
 
 ### 2.12 `gui/step1_panel.py` — Step1 标签页
-- 模型路径（远端目录浏览器）、Docker 镜像（自动刷新+输入筛选）、UCM 包/依赖（本地文件选择）、存储路径（远端目录浏览器）、TP 数量、输出目录
+- 模型路径（远端目录浏览器）、Docker 镜像（自动刷新+输入筛选）、依赖包（本地 .whl 文件选择）、存储路径（远端目录浏览器）、TP 数量、输出目录
+- UCM 源码已内置在 EXE 中，无需用户选择
 - 自动解析 config.json 显示 shard_size / shard_number
 - 后台线程执行 UcmBandwidthController
 
@@ -178,7 +181,7 @@
  │<──────────│            │             │              │                   │
  │  确认     │            │             │              │                   │
  │──────────>│            │             │              │                   │
- │           │ start 后台线程           │              │                   │
+ │           │ start 后台线程              │              │                   │
  │           │───────────>│             │              │                   │
  │           │            │ news(log,progress)          │                   │
  │           │            │────────────>│              │                   │
@@ -192,23 +195,23 @@
  │           │            │  (4) 解析config.json ────────────────────────> │ cat config.json
  │           │            │             │              │ 计算 shard_size  │
  │           │            │             │              │ _number          │
- │           │            │  (5) 上传包 ─────────────────────────────────> │ upload .tar.gz
- │           │            │             │              │                  │ upload .whl
- │           │            │  (6) 解压tar.gz ─────────────────────────────> │ tar -xzf
- │           │            │             │              │ find *.whl       │
+ │           │            │  (5) 打包上传UCM源码 ────────────────────────> │ tar ucm_src + upload
+ │           │            │             │              │                   │ tar -xzf
+ │           │            │  (6) 上传wrapt依赖 ──────────────────────────> │ upload .whl
  │           │            │  (7) 创建容器 ───────────────────────────────> │ docker run -d
  │           │            │             │              │   --gpus all     │
  │           │            │             │              │   -v model:model │
  │           │            │             │              │   -v storage:storage
  │           │            │             │              │   -v /tmp/pkgs   │
  │           │            │  (8) 安装wrapt ──────────────────────────────> │ docker exec pip
- │           │            │  (9) 安装UCM  ───────────────────────────────> │ docker exec pip
+ │           │            │  (9) 编译安装UCM ────────────────────────────> │ sed CMakeLists
+ │           │            │             │              │   DOWNLOAD_DEP=OFF
+ │           │            │             │              │   PLATFORM=cuda  │
+ │           │            │             │              │   pip install .  │
  │           │            │ (10) 上传bench脚本 ───────────────────────────> │ upload ucm_bench
  │           │            │ (11) 执行bench  ──────────────────────────────> │ docker exec
  │           │            │             │              │   python3         │
  │           │            │             │              │   ucm_bench.py    │
- │           │            │             │              │   --worker-num tp │
- │           │            │             │              │   --shard-size X  │
  │           │            │             │              │   ...             │
  │           │            │             │<────────────────── JSON结果 ─────│
  │           │            │ (12) 停止容器 ───────────────────────────────> │ docker stop
@@ -346,10 +349,9 @@ _main_window.py :: _on_demo_toggle()
        │   └─► MockVLLMServer.start()
        │       └─► HTTPServer(127.0.0.1:8000) 启动守护线程
        │
-       ├─► 预填 SSH 面板: host=localhost, user=demo, pwd=demo
-       ├─► 预填 Step2:  service_url=http://127.0.0.1:8000
-       └─► 预填 Step1:  ucm_pkg=demo-package.tar.gz, dep=wrapt-demo.whl,
-                         storage=/tmp/demo_kvcache
+        ├─► 预填 SSH 面板: host=localhost, user=demo, pwd=demo
+        ├─► 预填 Step2:  service_url=http://127.0.0.1:8000
+        └─► 预填 Step1:  dep=wrapt-demo.whl, storage=/tmp/demo_kvcache
 
 用户点击 Connect
        │
@@ -498,7 +500,12 @@ ucm_check_tool/
 │   ├── ucm_bench.py               # UCM Store 带宽测试 (dump/load)
 │   └── remote_bench.py            # (旧版) vLLM HTTP 测试 (废弃)
 │
-└── tests/                         # 单元测试 (pytest)
+├── scripts/                       # 构建辅助脚本
+│   └── download_ucm.py            # 下载 UCM 源码到 ucm_src/
+│
+├── ucm_src/                       # UCM 源码（gitignored，构建时由 download_ucm.py 生成）
+│
+└── tests/                         # 单元测试 (unittest)
     ├── test_ssh_client.py
     ├── test_bandwidth_test.py
     ├── test_ttft_test.py

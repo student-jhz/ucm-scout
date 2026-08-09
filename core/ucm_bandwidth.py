@@ -1,8 +1,10 @@
 import json
 import os
+import tarfile
+import tempfile
 import time
 from datetime import datetime
-from config import REMOTE_SCRIPT_DIR
+from config import REMOTE_SCRIPT_DIR, UCM_SRC_DIR
 
 
 class UcmBandwidthController:
@@ -10,7 +12,7 @@ class UcmBandwidthController:
     BLOCK_SIZE = 128
     ELEM_SIZE = 2
     REMOTE_PKG_DIR = "/tmp/ucm_pkgs"
-    EXTRACT_DIR = "/tmp/ucm_pkgs/_extracted"
+    REMOTE_UCM_SRC = "/tmp/ucm_pkgs/ucm_src"
 
     def __init__(self, ssh_client, log_callback=None, progress_callback=None):
         self.ssh = ssh_client
@@ -113,21 +115,20 @@ class UcmBandwidthController:
                  f"shard_number={shard_number}")
         return shard_size, shard_number
 
-    def run(self, model_path, docker_image, ucm_pkg_local, dep_whl_local,
+    def run(self, model_path, docker_image, dep_whl_local,
             storage_backend, request_len, tp, output_dir, epochs=None):
         if epochs is None:
-            epochs = 3  # Default 3 epochs for faster testing
-        
+            epochs = 3
+
         self._stopped = False
         self._container_id = None
         self._temp_dir = None
-        
+
         self.log(f"{'='*50}")
         self.log(f"[{datetime.now():%Y-%m-%d %H:%M:%S}] UCM bandwidth test started")
         self.log(f"  model_path: {model_path}")
         self.log(f"  docker_image: {docker_image}")
         self.log(f"  storage_backend: {storage_backend}")
-        self.log(f"  ucm_pkg: {os.path.basename(ucm_pkg_local)}")
         self.log(f"  dep_whl: {os.path.basename(dep_whl_local)}")
         self.log(f"  request_len: {request_len}, tp: {tp}")
 
@@ -154,13 +155,13 @@ class UcmBandwidthController:
         self.log(f"[calc] shard_size={shard_size}B, shard_number={shard_number}, "
                  f"block_number={block_number} (req_len/{self.BLOCK_SIZE})")
 
-        self.progress(5, "uploading packages...")
-        if not self._upload_packages(ucm_pkg_local, dep_whl_local):
+        self.progress(5, "uploading UCM source...")
+        if not self._upload_ucm_source():
             self._cleanup_storage(temp_dir)
             return None
 
-        self.progress(10, "extracting UCM package...")
-        if not self._extract_ucm(ucm_pkg_local):
+        self.progress(10, "uploading wrapt dependency...")
+        if not self._upload_wrapt(dep_whl_local):
             self._cleanup_storage(temp_dir)
             return None
 
@@ -177,8 +178,8 @@ class UcmBandwidthController:
             self._cleanup_storage(temp_dir)
             return None
 
-        self.progress(35, "installing UCM in container...")
-        if not self._install_ucm_whl(container_id):
+        self.progress(35, "building UCM from source...")
+        if not self._install_ucm_source(container_id, device_type):
             self._stop_container(container_id)
             self._cleanup_storage(temp_dir)
             return None
@@ -208,7 +209,7 @@ class UcmBandwidthController:
 
         self.progress(100, "UCM bandwidth test complete")
         self.log(f"[{datetime.now():%Y-%m-%d %H:%M:%S}] ====== ALL DONE ======")
-        
+
         self._container_id = None
         self._temp_dir = None
         return self.results
@@ -242,57 +243,63 @@ class UcmBandwidthController:
         else:
             self.log(f"[storage] OK: removed")
 
-    def _upload_packages(self, ucm_pkg_local, dep_whl_local):
-        pkg_name = os.path.basename(ucm_pkg_local)
-        dep_name = os.path.basename(dep_whl_local)
-
+    def _upload_ucm_source(self):
         self.log(f"[upload] creating {self.REMOTE_PKG_DIR} ...")
         self.ssh.execute(f"mkdir -p {self.REMOTE_PKG_DIR}", timeout=10)
 
+        if not os.path.isdir(UCM_SRC_DIR):
+            self.log(f"[upload] FAIL: UCM source dir not found: {UCM_SRC_DIR}")
+            return False
+
+        self.log(f"[upload] packing UCM source from {UCM_SRC_DIR} ...")
+        tmp_tar = os.path.join(tempfile.gettempdir(), "ucm_src.tar.gz")
         try:
-            self.ssh.upload_file(ucm_pkg_local, f"{self.REMOTE_PKG_DIR}/{pkg_name}")
-            self.log(f"[upload] OK: {pkg_name}")
+            with tarfile.open(tmp_tar, "w:gz") as tar:
+                tar.add(UCM_SRC_DIR, arcname="ucm_src")
         except Exception as e:
-            self.log(f"[upload] FAIL: {pkg_name} - {e}")
+            self.log(f"[upload] FAIL: cannot create tar: {e}")
+            return False
+
+        self.log(f"[upload] uploading ucm_src.tar.gz ...")
+        try:
+            self.ssh.upload_file(tmp_tar, f"{self.REMOTE_PKG_DIR}/ucm_src.tar.gz")
+        except Exception as e:
+            self.log(f"[upload] FAIL: upload failed: {e}")
+            try:
+                os.remove(tmp_tar)
+            except OSError:
+                pass
             return False
 
         try:
-            self.ssh.upload_file(dep_whl_local, f"{self.REMOTE_PKG_DIR}/{dep_name}")
-            self.log(f"[upload] OK: {dep_name}")
-        except Exception as e:
-            self.log(f"[upload] FAIL: {dep_name} - {e}")
-            return False
+            os.remove(tmp_tar)
+        except OSError:
+            pass
 
-        return True
-
-    def _extract_ucm(self, ucm_pkg_local):
-        pkg_name = os.path.basename(ucm_pkg_local)
-        rp = self.REMOTE_PKG_DIR
-
-        self.log(f"[extract] extracting {pkg_name} ...")
+        self.log(f"[upload] extracting ucm_src on remote ...")
         code, out, err = self.ssh.execute(
-            f"mkdir -p {self.EXTRACT_DIR} && "
-            f"tar -xzf {rp}/{pkg_name} -C {self.EXTRACT_DIR}",
+            f"rm -rf {self.REMOTE_UCM_SRC} && "
+            f"mkdir -p {self.REMOTE_UCM_SRC} && "
+            f"tar -xzf {self.REMOTE_PKG_DIR}/ucm_src.tar.gz -C {self.REMOTE_PKG_DIR}",
             timeout=30,
         )
         if code != 0:
-            self.log(f"[extract] FAIL: tar extract failed")
-            self.log(f"[extract]   reason: {err.strip() if err else 'unknown'}")
+            self.log(f"[upload] FAIL: extract failed: {err.strip() if err else 'unknown'}")
             return False
 
-        code, out, err = self.ssh.execute(
-            f"find {self.EXTRACT_DIR} -name '*.whl' -type f", timeout=10,
-        )
-        if code != 0 or not out.strip():
-            self.log(f"[extract] FAIL: no .whl found inside {pkg_name}")
-            return False
-
-        whl_files = [line.strip() for line in out.strip().split("\n") if line.strip()]
-        self.log(f"[extract] OK: found {len(whl_files)} whl(s)")
-        for w in whl_files:
-            self.log(f"[extract]   {w}")
-        self._extracted_whls = whl_files
+        self.log(f"[upload] OK: UCM source ready at {self.REMOTE_UCM_SRC}")
         return True
+
+    def _upload_wrapt(self, dep_whl_local):
+        dep_name = os.path.basename(dep_whl_local)
+        self.log(f"[upload] uploading {dep_name} ...")
+        try:
+            self.ssh.upload_file(dep_whl_local, f"{self.REMOTE_PKG_DIR}/{dep_name}")
+            self.log(f"[upload] OK: {dep_name}")
+            return True
+        except Exception as e:
+            self.log(f"[upload] FAIL: {dep_name} - {e}")
+            return False
 
     def _create_container(self, docker_image, model_path, storage_backend, device_type):
         timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
@@ -375,41 +382,44 @@ class UcmBandwidthController:
         self.log(f"[install] OK: wrapt installed")
         return True
 
-    def _install_ucm_whl(self, container_id):
-        rp = self.REMOTE_PKG_DIR
+    def _install_ucm_source(self, container_id, device_type):
+        platform = "cuda" if device_type == "nvidia" else "ascend"
+        ucm_src = self.REMOTE_UCM_SRC
 
-        if not getattr(self, "_extracted_whls", None):
-            self.log(f"[install] FAIL: no extracted whl files found")
-            return False
+        self.log(f"[install] patching CMakeLists.txt to use bundled dependencies ...")
+        code, _, err = self.ssh.execute(
+            f"sed -i 's/option(DOWNLOAD_DEPENDENCE \"download dependence by cmake.\" ON)/option(DOWNLOAD_DEPENDENCE \"download dependence by cmake.\" OFF)/' "
+            f"{ucm_src}/CMakeLists.txt",
+            timeout=10,
+        )
+        if code != 0:
+            self.log(f"[install] WARN: cannot patch CMakeLists.txt: {err.strip()}")
+        else:
+            self.log(f"[install] OK: DOWNLOAD_DEPENDENCE set to OFF")
 
-        ucm_whls = [w for w in self._extracted_whls
-                     if os.path.basename(w).lower().startswith("uc_manager")]
-        if not ucm_whls:
-            self.log(f"[install] FAIL: no uc_manager whl found")
-            return False
+        self.log(f"[install] building UCM from source (PLATFORM={platform}) ...")
+        cmd = (
+            f"docker exec {container_id} bash -c '"
+            f"cd {ucm_src} && "
+            f"PLATFORM={platform} pip install --no-build-isolation "
+            f"--no-deps .'"
+        )
+        self.log(f"[install]   $ {cmd}")
+        code, out, err = self.ssh.execute(cmd, timeout=600)
 
-        self.log(f"[install] step 2/2: UCM package")
-        ok_all = True
-        for whl in ucm_whls:
-            cmd = f"docker exec {container_id} pip install {whl}"
-            self.log(f"[install]   $ {cmd}")
-            code, out, err = self.ssh.execute(cmd, timeout=120)
-
-            for line in out.strip().split("\n"):
+        for line in out.strip().split("\n"):
+            if line.strip():
+                self.log(f"[install]   {line.strip()}")
+        if err.strip():
+            for line in err.strip().split("\n"):
                 if line.strip():
-                    self.log(f"[install]   {line.strip()}")
-            if err.strip():
-                for line in err.strip().split("\n"):
-                    if line.strip():
-                        self.log(f"[install]   [stderr] {line.strip()}")
+                    self.log(f"[install]   [stderr] {line.strip()}")
 
-            if code != 0:
-                self.log(f"[install] FAIL: {os.path.basename(whl)} install failed (exit={code})")
-                ok_all = False
-            else:
-                self.log(f"[install] OK: {os.path.basename(whl)} installed")
-
-        return ok_all
+        if code != 0:
+            self.log(f"[install] FAIL: UCM source build failed (exit={code})")
+            return False
+        self.log(f"[install] OK: UCM installed from source")
+        return True
 
     def _upload_bench_script(self):
         local_script = os.path.join(REMOTE_SCRIPT_DIR, "ucm_bench.py")
