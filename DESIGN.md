@@ -506,8 +506,8 @@ ucm_check_tool/
 ├── ucm_src/                       # UCM 源码（gitignored，构建时由 download_ucm.py 生成）
 │
 └── tests/                         # 单元测试 (unittest)
-    ├── test_ssh_client.py
-    ├── test_bandwidth_test.py
-    ├── test_ttft_test.py
-    └── test_analyzer.py
+    ├── test_ucm_bandwidth.py       # Step 1: UcmBandwidthController 编译流程
+    ├── test_ssh_client.py          # SSHClient
+    ├── test_ttft_test.py           # TTFTTestController
+    └── test_analyzer.py            # Analyzer
 ```

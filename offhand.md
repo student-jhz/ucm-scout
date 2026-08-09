@@ -37,7 +37,6 @@ ucm_check_tool/
 │   ├── ucm_bandwidth.py        # ≡ Step1 后端: Docker + UCM Store 带宽测试
 │   ├── ttft_test.py            # ≡ Step2 后端: vLLM API TTFT 测试
 │   ├── analyzer.py             # ≡ Step3 后端: UCM PC 收益分析
-│   ├── bandwidth_test.py       # (废弃) 旧版 vLLM HTTP 带宽测试
 │   └── demo.py                 # 本地演示: MockSSHClient + MockVLLMServer
 │
 ├── gui/                        # 表现层 (Tkinter)
@@ -48,14 +47,18 @@ ucm_check_tool/
 │   └── step3_panel.py          # Step 3: 收益分析 (UCM PC pipeline 模型)
 │
 ├── remote_scripts/             # 上传到远端容器执行的独立脚本
-│   ├── ucm_bench.py            # UCM Store 带宽测试 (dump_data/load_data)
-│   └── remote_bench.py         # (废弃) 旧版 vLLM benchmark
+│   └── ucm_bench.py            # UCM Store 带宽测试 (dump_data/load_data)
 │
-├── tests/                      # pytest
-│   ├── test_analyzer.py
-│   ├── test_bandwidth_test.py
-│   ├── test_ssh_client.py
-│   └── test_ttft_test.py
+├── scripts/                    # 构建辅助
+│   └── download_ucm.py         # 下载 UCM 源码+编译依赖到 ucm_src/
+│
+├── tests/                      # unittest
+│   ├── test_ucm_bandwidth.py   # Step 1: UcmBandwidthController (19 tests)
+│   ├── test_ssh_client.py      # SSH 客户端
+│   ├── test_ttft_test.py       # Step 2: TTFT
+│   └── test_analyzer.py        # Step 3: 收益分析
+│
+├── ucm_src/                    # UCM 源码+编译依赖 (gitignored，构建时生成)
 │
 └── logs/, results/             # 运行时生产 (gitignored)
 ```
@@ -69,21 +72,23 @@ ucm_check_tool/
 ```
 SSH 连接 → 解析 config.json (shard_size/number 自动计算)
          → 刷新 Docker 镜像列表 (docker images | grep vllm)
-         → 用户选择镜像 + 上传 UCM tar.gz + wrapt whl
+         → 用户选择 wrapt .whl 文件 (UCM 源码已内置在 EXE 中)
          → 存储路径确认 (弹窗告知会创建临时目录并清理)
          → 执行:
            1. test -d 检查存储路径
            2. mkdir -p 创建临时子目录 ucm_bench_<timestamp>
            3. cat config.json → 计算 shard_size, shard_number
-           4. upload .tar.gz + .whl → /tmp/ucm_pkgs/
-           5. tar -xzf 解压 → find *.whl
+           4. 本地 tar ucm_src/ → upload tar.gz → 远端解压 → /tmp/ucm_pkgs/ucm_src/
+           5. upload wrapt .whl → /tmp/ucm_pkgs/
            6. docker run 创建容器 (挂载 model, storage, pkgs)
            7. pip install wrapt.whl
-           8. pip install ucm whl
-           9. upload ucm_bench.py
-          10. docker exec bash -c 'PYTHONUNBUFFERED=1 python3 ucm_bench.py ...'
-          11. docker stop + rm -rf 清理临时目录
-          12. 读取 JSON 结果 → 保存本地
+           8. sed 将 CMakeLists.txt 中 DOWNLOAD_DEPENDENCE 改为 OFF
+           9. PLATFORM=cuda pip install --no-build-isolation --no-deps .
+              (用本地编译依赖 fmt/spdlog/pybind11/zlib, 不联网)
+          10. upload ucm_bench.py
+          11. docker exec bash -c 'PYTHONUNBUFFERED=1 python3 ucm_bench.py ...'
+          12. docker stop + rm -rf 清理临时目录
+          13. 读取 JSON 结果 → 保存本地
 ```
 
 **shard_size 计算**：GQA = `num_kv_heads × head_dim × 2 × 128 × 2`，MLA = `(kv_lora_rank + qk_rope_head_dim) × 128 × 2`
@@ -151,6 +156,10 @@ is_beneficial = ucm_ttft < full_prefill_ttft
 ## 构建 EXE
 
 ```bash
+# 1. 下载 UCM 源码+编译依赖 (构建前执行一次)
+python scripts/download_ucm.py
+
+# 2. 构建 EXE
 pip install pyinstaller
 pyinstaller build.spec --clean
 # 产物: dist/UCM-Scout.exe
@@ -161,9 +170,8 @@ pyinstaller build.spec --clean
 ## 执行测试
 
 ```bash
-pip install pytest  # (如果未安装)
-python -m pytest tests/ -v
-# 共 25 个测试
+python -m unittest discover -s tests -v
+# 共 39 个测试
 ```
 
 ---
@@ -171,8 +179,20 @@ python -m pytest tests/ -v
 ## Git 提交流程
 
 ```bash
+# 1. 跑测试验证
+python -m unittest discover -s tests -v
+
+# 2. 更新 .md 文档
+# 3. 提交代码
 git add -A
 git commit -m "..."
+
+# 4. 重新编译 EXE 并提交
+pyinstaller build.spec --clean
+git add -f dist/UCM-Scout.exe
+git commit -m "Update UCM-Scout.exe"
+
+# 5. 推送
 git push origin main
 # SSH: git@github.com:student-jhz/ucm-scout.git
 ```
