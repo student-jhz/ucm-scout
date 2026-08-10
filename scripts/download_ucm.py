@@ -55,9 +55,11 @@ def _rsync_files(src_dir, dst_dir):
     """Copy files from src_dir to dst_dir using robocopy on Windows, cp -r on Linux."""
     os.makedirs(dst_dir, exist_ok=True)
     if sys.platform == "win32":
-        subprocess.check_call(
+        result = subprocess.run(
             ["robocopy", src_dir, dst_dir, "/E", "/NFL", "/NDL", "/NJH", "/NJS"],
         )
+        if result.returncode > 7:
+            raise subprocess.CalledProcessError(result.returncode, result.args)
     else:
         subprocess.check_call(["cp", "-r", f"{src_dir}/.", dst_dir])
 
