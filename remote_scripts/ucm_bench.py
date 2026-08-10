@@ -39,7 +39,7 @@ def make_array(size, alignment=262144, dtype=np.uint8):
 def create_store(shard_size, shard_number, storage_backend, device_id=-1):
     config = {
         "store_pipeline": "Posix",
-        "posix_io_engine": "aio",
+        "posix_io_engine": "psync",
         "storage_backends": [storage_backend],
         "tensor_size": shard_size,
         "shard_size": shard_size,
