@@ -6,18 +6,9 @@ UCM 运行环境带宽检测、TTFT 测试与收益分析工具。
 
 ### 方式一：直接使用已构建的 EXE（推荐）
 
-从 [Releases 页面](https://github.com/student-jhz/ucm-scout/releases) 下载最新版 `ucm_check_tool.exe`，直接双击运行，**无需安装 Python 环境**。
+从仓库 `dist/UCM-Scout.exe` 下载最新版本，直接双击运行，**无需安装 Python 环境**。
 
-### 方式二：通过源码运行
-
-需要 Python 3.9+ 环境：
-
-```bash
-pip install -r requirements.txt
-python main.py
-```
-
-### 方式三：自行构建 EXE
+### 方式二：自行构建 EXE
 
 ```bash
 # 1. 下载 UCM 源码（构建前执行一次，固定下载 UCM tag v0.6.0）
@@ -58,7 +49,7 @@ pyinstaller build.spec --clean
 
 程序自动：上传源码+依赖 → 创建临时容器 → 挂载模型/存储路径 → pip 安装 wrapt → 从源码编译安装 UCM → 执行 `dump_data`/`load_data` 测量 KV cache 读写带宽 → 清理容器
 
-> 带宽测试使用 UCM 底层存储引擎（Posix + AIO），测量 `shard_size × shard_number × block_number` 的 IO 吞吐。
+> 带宽测试使用 UCM 底层存储引擎（Posix + psync），测量 `shard_size × shard_number × block_number` 的 IO 吞吐。
 
 ### Step2 — TTFT 测试
 
