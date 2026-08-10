@@ -11,13 +11,14 @@ class UcmBandwidthController:
     RESULT_FILE = "ucm_bandwidth_result.json"
     BLOCK_SIZE = 128
     ELEM_SIZE = 2
-    REMOTE_PKG_DIR = "/tmp/ucm_pkgs"
-    REMOTE_UCM_SRC = "/tmp/ucm_pkgs/ucm_src"
+    REMOTE_PKG_DIR = "/tmp/ucm-scout"
+    REMOTE_UCM_SRC = "/tmp/ucm-scout/ucm_src"
 
-    def __init__(self, ssh_client, log_callback=None, progress_callback=None):
+    def __init__(self, ssh_client, log_callback=None, progress_callback=None, confirm_cleanup_callback=None):
         self.ssh = ssh_client
         self.log = log_callback or (lambda msg: None)
         self.progress = progress_callback or (lambda pct, msg: None)
+        self.confirm_cleanup = confirm_cleanup_callback or (lambda dirs: True)
         self.results = {}
         self._stopped = False
         self._container_id = None
@@ -139,6 +140,16 @@ class UcmBandwidthController:
 
         self.log("[init] OK: SSH connected")
 
+        existing_dirs = self.check_remote_pkg_dir()
+        if existing_dirs:
+            self.log(f"[upload] {self.REMOTE_PKG_DIR} already exists with subdirs: {existing_dirs}")
+            if not self.confirm_cleanup(existing_dirs):
+                self.log("[upload] cancelled by user")
+                return None
+            if not self.cleanup_remote_pkg_dir():
+                self.log("[upload] FAIL: cannot cleanup existing directory")
+                return None
+
         device_type = self._detect_device_type()
 
         temp_dir = self._check_and_prepare_storage(storage_backend)
@@ -235,6 +246,25 @@ class UcmBandwidthController:
             return None
         self.log(f"[storage] OK: temp dir created, data will be cleaned up after test")
         return temp_dir
+
+    def check_remote_pkg_dir(self):
+        code, out, err = self.ssh.execute(
+            f"test -d {self.REMOTE_PKG_DIR} && ls -1 {self.REMOTE_PKG_DIR} || echo 'NOT_EXISTS'",
+            timeout=10
+        )
+        if "NOT_EXISTS" in out:
+            return []
+        dirs = [d.strip() for d in out.strip().split("\n") if d.strip()]
+        return dirs
+
+    def cleanup_remote_pkg_dir(self):
+        self.log(f"[upload] cleaning up {self.REMOTE_PKG_DIR} ...")
+        code, out, err = self.ssh.execute(f"rm -rf {self.REMOTE_PKG_DIR}", timeout=30)
+        if code != 0:
+            self.log(f"[upload] WARN: cleanup failed: {err}")
+            return False
+        self.log(f"[upload] OK: {self.REMOTE_PKG_DIR} cleaned")
+        return True
 
     def _cleanup_storage(self, temp_dir):
         self.log(f"[storage] cleaning up {temp_dir} ...")

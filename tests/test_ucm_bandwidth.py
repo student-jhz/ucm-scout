@@ -155,8 +155,8 @@ class TestUcmBandwidthController(unittest.TestCase):
                     ok = self.ctrl._upload_wrapt(dep_whl)
                     self.assertTrue(ok, "upload_wrapt should succeed")
 
-                self.assertIn("/tmp/ucm_pkgs/ucm_src.tar.gz", self.ssh._sftp_files)
-                self.assertIn("/tmp/ucm_pkgs/wrapt-1.17.2-cp39-cp39-linux_x86_64.whl", self.ssh._sftp_files)
+                self.assertIn("/tmp/ucm-scout/ucm_src.tar.gz", self.ssh._sftp_files)
+                self.assertIn("/tmp/ucm-scout/wrapt-1.17.2-cp39-cp39-linux_x86_64.whl", self.ssh._sftp_files)
             finally:
                 shutil.rmtree(dep_dir)
         finally:

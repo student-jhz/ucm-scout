@@ -256,7 +256,18 @@ class Step1Panel(ttk.Frame):
         def progress(pct, msg):
             self.after(0, lambda: self._update_progress(pct, msg))
 
-        self._controller = UcmBandwidthController(self.app.ssh, log, progress)
+        def confirm_cleanup(dirs):
+            result = [None]
+            def show_dialog():
+                msg = tr("msg.confirm_cleanup", dir="/tmp/ucm-scout", subdirs="\n  ".join(dirs))
+                result[0] = messagebox.askyesno(tr("title.warning"), msg)
+            self.after(0, show_dialog)
+            while result[0] is None:
+                import time
+                time.sleep(0.1)
+            return result[0]
+
+        self._controller = UcmBandwidthController(self.app.ssh, log, progress, confirm_cleanup)
         result = self._controller.run(
             model_path=self.model_dir_entry.get(),
             docker_image=self.docker_var.get(),
