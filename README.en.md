@@ -6,18 +6,9 @@ A tool for UCM runtime environment bandwidth testing, TTFT testing, and benefit 
 
 ### Method 1: Use the prebuilt EXE (recommended)
 
-Download the latest `ucm_check_tool.exe` from the [Releases page](https://github.com/student-jhz/ucm-scout/releases) and double-click to run. No Python environment needed.
+Download the latest version from the repository's `dist/UCM-Scout.exe` and double-click to run. No Python environment needed.
 
-### Method 2: Run from source
-
-Requires Python 3.9+:
-
-```bash
-pip install -r requirements.txt
-python main.py
-```
-
-### Method 3: Build the EXE yourself
+### Method 2: Build the EXE yourself
 
 ```bash
 # 1. Download the UCM source (run once before building; pins UCM tag v0.6.0)
@@ -58,7 +49,7 @@ After launch, the window contains the following sections from top to bottom:
 
 The program automatically: uploads source + dependencies → creates a temporary container → mounts model/storage paths → pip installs wrapt → compiles and installs UCM from source → runs `dump_data`/`load_data` to measure KV cache read/write bandwidth → cleans up the container.
 
-> The bandwidth test uses the UCM lower-level storage engine (Posix + AIO) to measure IO throughput of `shard_size × shard_number × block_number`.
+> The bandwidth test uses the UCM lower-level storage engine (Posix + psync) to measure IO throughput of `shard_size × shard_number × block_number`.
 
 ### Step2 — TTFT Test
 
