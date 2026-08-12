@@ -1,5 +1,7 @@
 # UCM-Scout
 
+[![Docs](https://img.shields.io/badge/Docs-在线文档-blue)](https://student-jhz.github.io/ucm-scout/)
+
 UCM 运行环境带宽检测、TTFT 测试与收益分析工具。
 
 ## 下载与使用

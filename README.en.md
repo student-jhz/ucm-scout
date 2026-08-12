@@ -1,5 +1,7 @@
 # UCM-Scout
 
+[![Docs](https://img.shields.io/badge/Docs-Documentation-blue)](https://student-jhz.github.io/ucm-scout/)
+
 A tool for UCM runtime environment bandwidth testing, TTFT testing, and benefit analysis.
 
 ## Download & Usage
